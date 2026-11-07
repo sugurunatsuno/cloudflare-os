@@ -50,6 +50,7 @@ const API_TOKEN_PLACEHOLDERS: Record<AiModelProvider, string> = {
   claude: '',
   copilot: '',
   gemini: '',
+  mistral: '',
 }
 
 // Providers whose client can send no API key at all, so a proxy that extra headers authenticate

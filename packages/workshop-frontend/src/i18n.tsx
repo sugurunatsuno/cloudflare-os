@@ -355,6 +355,13 @@ const JA: Record<string, string> = {
   'Connect Gemini': 'Geminiを接続',
   'Disconnect Gemini': 'Geminiを切断',
   'Failed to update the Gemini connection.': 'Geminiの接続を更新できませんでした。',
+  'Mistral is connected': 'Mistralに接続済み（{count}モデル）',
+  'Paste a Mistral API key once to add the Mistral models to chat.':
+      'MistralのAPIキーを一度登録すると、Mistralのモデルがチャットに追加されます。',
+  'Mistral API key': 'MistralのAPIキー',
+  'Connect Mistral': 'Mistralを接続',
+  'Disconnect Mistral': 'Mistralを切断',
+  'Failed to update the Mistral connection.': 'Mistralの接続を更新できませんでした。',
 }
 
 function readInitialLanguage(): Language {

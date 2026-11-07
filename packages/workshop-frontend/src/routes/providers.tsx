@@ -17,6 +17,7 @@ import { ChatGptConnectionPanel } from '../features/ai-models/ChatGptConnectionP
 import { ClaudeConnectionPanel } from '../features/ai-models/ClaudeConnectionPanel'
 import { CopilotConnectionPanel } from '../features/ai-models/CopilotConnectionPanel'
 import { GeminiConnectionPanel } from '../features/ai-models/GeminiConnectionPanel'
+import { MistralConnectionPanel } from '../features/ai-models/MistralConnectionPanel'
 import { OpenCodeGoConnectionPanel } from '../features/ai-models/OpenCodeGoConnectionPanel'
 import { CONNECTION_MANAGED_PROVIDERS } from '@gadgets/workshop-shared/api'
 
@@ -180,6 +181,7 @@ function ProvidersPage() {
   const [claudeAccount, setClaudeAccount] = useState<{email?: string} | null>(null)
   const [copilotAccount, setCopilotAccount] = useState<{login?: string} | null>(null)
   const [geminiAccount, setGeminiAccount] = useState<{modelCount: number} | null>(null)
+  const [mistralAccount, setMistralAccount] = useState<{modelCount: number} | null>(null)
   const [goAccount, setGoAccount] = useState<OpenCodeGoAccountInfo | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -192,7 +194,7 @@ function ProvidersPage() {
   const fetchAll = async () => {
     setLoadError(false)
     try {
-      const [chatList, decisionList, qm, cfg, chatGpt, go, claude, copilot, gemini] = await Promise.all([
+      const [chatList, decisionList, qm, cfg, chatGpt, go, claude, copilot, gemini, mistral] = await Promise.all([
         authenticatedApi.listModels(),
         authenticatedApi.listModels('decision'),
         authenticatedApi.getQuickModel(),
@@ -202,6 +204,7 @@ function ProvidersPage() {
         authenticatedApi.getClaudeAccount(),
         authenticatedApi.getCopilotAccount(),
         authenticatedApi.getGeminiAccount(),
+        authenticatedApi.getMistralAccount(),
       ])
       setChatModels(chatList)
       setDecisionModels(decisionList)
@@ -212,6 +215,7 @@ function ProvidersPage() {
       setClaudeAccount(claude)
       setCopilotAccount(copilot)
       setGeminiAccount(gemini)
+      setMistralAccount(mistral)
       // Each dialog saves a model of the user's own, so none stays open, or opens late, once the
       // deployment says users may not add theirs.
       if (cfg.enabled && !cfg.userModelsEnabled) {
@@ -356,6 +360,10 @@ function ProvidersPage() {
         {!loading && !loadError && (canAddModels || geminiAccount !== null) && (
           <GeminiConnectionPanel api={authenticatedApi}
             account={geminiAccount} canConnect={canAddModels} onChange={fetchAll} />
+        )}
+        {!loading && !loadError && (canAddModels || mistralAccount !== null) && (
+          <MistralConnectionPanel api={authenticatedApi}
+            account={mistralAccount} canConnect={canAddModels} onChange={fetchAll} />
         )}
         {/* Notices */}
         {(gatewayMode || (!gatewayMode && hasChatModel)) && !loading && !loadError && (

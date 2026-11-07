@@ -31,6 +31,7 @@ const MODELS_DEV_PROVIDER_IDS: Record<AiModelProvider, string | null> = {
   claude: null,
   copilot: null,
   gemini: null,
+  mistral: null,
   'opencode-go': 'opencode-go',
   openrouter: 'openrouter',
 }

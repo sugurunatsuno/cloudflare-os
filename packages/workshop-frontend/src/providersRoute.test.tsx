@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   getClaudeAccount: async () => null,
   getCopilotAccount: async () => null,
   getGeminiAccount: async () => null,
+  getMistralAccount: async () => null,
   getAiConfig: vi.fn<() => Promise<Partial<AiGatewayInfo>>>(async () => ({ enabled: false })),
   setQuickModel: vi.fn<(modelId: string | null) => Promise<void>>(async () => {}),
 }))
