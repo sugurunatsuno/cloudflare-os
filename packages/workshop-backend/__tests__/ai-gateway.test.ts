@@ -602,7 +602,7 @@ describe("GatewayModels", () => {
 
   it("names the providers a model may be added under, in catalog order", () => {
     // The gateway enables ollama here, but does not serve it.
-    const models = gatewayModels({}, "openai,ollama,anthropic,mistral");
+    const models = gatewayModels({}, "openai,ollama,anthropic,notaprovider");
     expect(models.addableProviders).toEqual(
         Object.keys(SUGGESTED_MODELS).filter(p => p === "openai" || p === "anthropic"));
     expect(models.addableProviders).toHaveLength(2);
@@ -625,8 +625,8 @@ describe("GatewayModels", () => {
     });
 
     it.each([
-      ["an unknown provider", { ...NEW, provider: "mistral" },
-        'Provider "mistral" is not served through AI Gateway.'],
+      ["an unknown provider", { ...NEW, provider: "notaprovider" },
+        'Provider "notaprovider" is not served through AI Gateway.'],
       ["an inherited provider name", { ...NEW, provider: "__proto__" },
         'Provider "__proto__" is not served through AI Gateway.'],
       ["a provider the gateway enables but can't serve", { ...NEW, provider: "ollama" },
@@ -659,7 +659,7 @@ describe("GatewayModels", () => {
       expect([...gatewayModels({}, "anthropic").providers]).toEqual(["anthropic"]);
       // Neither ollama, which has no gateway route, nor a name that is no provider's.
       const models = gatewayModels({
-        addedProviders: ["openai", "ollama", "mistral", "constructor"] as AiModelProvider[],
+        addedProviders: ["openai", "ollama", "notaprovider", "constructor"] as AiModelProvider[],
       }, "anthropic");
       expect([...models.providers]).toEqual(["anthropic", "openai"]);
       expect(models.providerSettings.map(({ provider }) => provider)).toEqual(CATALOG_ORDER);

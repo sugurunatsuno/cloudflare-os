@@ -679,6 +679,12 @@ export interface AuthenticatedApi extends RpcTarget {
   getGeminiAccount(): Promise<{modelCount: number} | null>;
   /** Remove the Gemini connection and its managed model configurations. */
   disconnectGemini(): Promise<void>;
+  /** Connect a personal Mistral API key and register the available Mistral models. */
+  connectMistral(apiKey: string): Promise<void>;
+  /** The connected Mistral account, never its API key. */
+  getMistralAccount(): Promise<{modelCount: number} | null>;
+  /** Remove the Mistral connection and its managed model configurations. */
+  disconnectMistral(): Promise<void>;
   /** Get profile info for the user who is logged in. */
   whoami(): Promise<AiChatAuthorInfo>;
 
@@ -2312,7 +2318,7 @@ export type CloudflareAccountOption = {
  */
 export type AiModelProvider =
     "openai" | "anthropic" | "google" | "cloudflare" | "ollama" | "cloudflare-auto-router" |
-    "opencode-go" | "openrouter" | "chatgpt" | "claude" | "copilot" | "gemini";
+    "opencode-go" | "openrouter" | "chatgpt" | "claude" | "copilot" | "gemini" | "mistral";
 
 /** The model ID of AI Gateway's Auto Router, the one model of "cloudflare-auto-router". */
 export const AUTO_ROUTER_MODEL_ID = "cloudflare/auto";
@@ -2325,7 +2331,7 @@ export const AUTO_ROUTER_MODEL_ID = "cloudflare/auto";
  * families.
  */
 export const DIRECT_ONLY_PROVIDERS: ReadonlySet<AiModelProvider> =
-    new Set(["opencode-go", "openrouter", "chatgpt", "claude", "copilot", "gemini"]);
+    new Set(["opencode-go", "openrouter", "chatgpt", "claude", "copilot", "gemini", "mistral"]);
 
 /**
  * Providers whose models are entirely managed by their connection on the AI Providers page:
@@ -2334,7 +2340,7 @@ export const DIRECT_ONLY_PROVIDERS: ReadonlySet<AiModelProvider> =
  * like OpenRouter take a hand-added model).
  */
 export const CONNECTION_MANAGED_PROVIDERS: ReadonlySet<AiModelProvider> =
-    new Set(["chatgpt", "claude", "copilot", "gemini"]);
+    new Set(["chatgpt", "claude", "copilot", "gemini", "mistral"]);
 
 /** What starting a Copilot device-flow sign-in hands the browser to hand the user. */
 export type CopilotConnectionStart = {
@@ -2868,6 +2874,7 @@ const SUGGESTED_MODEL_CATALOG = {
   "claude": {},
   "copilot": {},
   "gemini": {},
+  "mistral": {},
   "opencode-go": {
     "gpt-6-luna": {name: "GPT 6 Luna (OpenCode Go)", contextWindow: 1050000, outputLimit: 128000},
     "gpt-5.6-luna": {name: "GPT 5.6 Luna (OpenCode Go)", contextWindow: 1050000, outputLimit: 128000},

@@ -233,6 +233,15 @@ class AuthenticatedApiImpl extends RpcTarget implements AuthenticatedApi {
   disconnectGemini(): Promise<void> {
     return this.#user.disconnectGemini();
   }
+  connectMistral(apiKey: string): Promise<void> {
+    return this.#user.connectMistral(apiKey);
+  }
+  getMistralAccount(): Promise<{modelCount: number} | null> {
+    return retryOnDoReset(() => this.#user.getMistralAccount());
+  }
+  disconnectMistral(): Promise<void> {
+    return this.#user.disconnectMistral();
+  }
   addModel(profile: AiChatAuthorInfo, config: RedactedAiModelConfig,
            copySecretsFrom?: string): Promise<void> {
     return this.#user.addModel(profile, config, copySecretsFrom);

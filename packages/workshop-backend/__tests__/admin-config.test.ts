@@ -194,7 +194,7 @@ describe("admin config gateway models", () => {
         "nonsense",
         null,
         { ...added, id: "no-provider", provider: undefined },
-        { ...added, id: "unknown-provider", provider: "mistral" },
+        { ...added, id: "unknown-provider", provider: "notaprovider" },
         { ...added, id: "inherited-provider", provider: "constructor" },
         { ...added, id: " " },
         { ...added, id: "x".repeat(201) },
@@ -378,7 +378,7 @@ describe("admin config gateway models", () => {
     }
 
     let config = parseAdminConfig(JSON.stringify({
-      addedProviders: ["openai", "mistral", "google", 3, null, "openai", ["anthropic"],
+      addedProviders: ["openai", "notaprovider", "google", 3, null, "openai", ["anthropic"],
           "constructor", " anthropic", "ollama"],
     }));
     // Whether AI Gateway can route a provider is not a matter of shape: ollama is one.
@@ -393,7 +393,7 @@ describe("admin config gateway models", () => {
       expect(parseAdminConfig(stored).providerOrder, stored).toStrictEqual([]);
     }
     let config = parseAdminConfig(JSON.stringify(
-        { providerOrder: ["openai", "mistral", 3, "openai", "constructor", "cloudflare"] }));
+        { providerOrder: ["openai", "notaprovider", 3, "openai", "constructor", "cloudflare"] }));
     expect(config.providerOrder).toStrictEqual(["openai", "cloudflare"]);
     expect(parseAdminConfig(serializeAdminConfig(config)).providerOrder)
         .toStrictEqual(config.providerOrder);
@@ -407,7 +407,7 @@ describe("admin config gateway models", () => {
     let config = parseAdminConfig(JSON.stringify({ modelOrder: {
       openai: ["gpt-6-luna", 3, "gpt-6-sol", "gpt-6-luna"],
       anthropic: "claude-opus-5-5",
-      mistral: ["mistral-large"],
+      notaprovider: ["mistral-large"],
     } }));
     expect(config.modelOrder).toStrictEqual(
         { openai: ["gpt-6-luna", "gpt-6-sol"], anthropic: [] });

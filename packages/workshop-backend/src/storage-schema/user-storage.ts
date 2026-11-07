@@ -309,6 +309,7 @@ export function makeUserStorage(storage: DurableObjectStorage) {
       // holds GitHub's pending device code until it completes or expires.
       copilotPending: <{id: string} | null>null,
       geminiConnection: <{apiKey: string; modelIds: string[]} | null>null,
+      mistralConnection: <{apiKey: string; modelIds: string[]} | null>null,
       openCodeGo: <OpenCodeGoConnection | null>null,
       openCodeGoMigrationCompleted: false,
       preferredModel: <string | null>null,

@@ -156,7 +156,7 @@ describe("AdminSettings added gateway models", () => {
     ["an over-long name", { ...ADDED, name: "x".repeat(201) }],
     ["a fractional context window", { ...ADDED, contextWindow: 1.5 }],
     ["a non-positive output limit", { ...ADDED, outputLimit: 0 }],
-    ["an unknown provider", { ...ADDED, provider: "mistral" }],
+    ["an unknown provider", { ...ADDED, provider: "notaprovider" }],
   ])("refuses %s as malformed", async (_, model) => {
     const { inDo, stored, put } = adminSettings();
     await expect(inDo(admin => admin.addGatewayModel(model as GatewayModel, ACTOR)))

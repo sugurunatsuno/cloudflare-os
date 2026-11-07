@@ -1583,6 +1583,60 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
     });
   }
 
+  async getMistralAccount(): Promise<{modelCount: number} | null> {
+    const saved = this.storage.mistralConnection.get();
+    return saved ? {modelCount: saved.modelIds.length} : null;
+  }
+
+  async connectMistral(apiKey: string): Promise<void> {
+    (await getGatewayModels(this.env))?.refuseUserModel();
+    const key = apiKey.trim();
+    if (!key || key.length > 512 || /[\r\n]/.test(key)) throw new Error("Enter a valid Mistral API key.");
+    const response = await fetch("https://api.mistral.ai/v1/models", {
+      headers: {Authorization: `Bearer ${key}`}, signal: AbortSignal.timeout(30000), redirect: "manual",
+    });
+    if (response.status === 400 || response.status === 401 || response.status === 403) {
+      throw new Error("The Mistral API key was not accepted; check the key.");
+    }
+    if (!response.ok) throw new Error(`Unable to list Mistral models (${response.status}).`);
+    const catalog = z.object({data: z.array(z.object({
+      id: z.string().regex(/^[\w.:-]{1,120}$/),
+      name: z.string().min(1).max(256).optional(),
+      capabilities: z.object({completion_chat: z.boolean().optional()}).optional(),
+    })).max(500)}).parse(await readProviderJson(response, 2 * 1024 * 1024));
+    const entries = catalog.data
+        .filter(model => model.capabilities?.completion_chat !== false);
+    if (!entries.length) throw new Error("This API key has no usable Mistral models.");
+    const records = entries.map(entry => ({
+      profile: {type: "agent" as const, id: `mistral:${entry.id}`,
+        name: `${entry.name ?? entry.id} (Mistral)`},
+      config: {provider: "mistral" as const, model: entry.id, apiToken: key},
+    }));
+    const previousId = this.storage.mistralConnection.get()?.modelIds ?? [];
+    this.ctx.storage.transactionSync(() => {
+      for (const id of previousId) {
+        if (this.storage.aiModels.get(id)?.config.provider === "mistral") {
+          this.storage.aiModels.delete(id);
+        }
+      }
+      for (const record of records) this.storage.aiModels.put(record);
+      this.storage.mistralConnection.put({apiKey: key, modelIds: records.map(r => r.profile.id)});
+    });
+  }
+
+  async disconnectMistral(): Promise<void> {
+    const saved = this.storage.mistralConnection.get();
+    if (!saved) return;
+    this.ctx.storage.transactionSync(() => {
+      for (const id of saved.modelIds) {
+        if (this.storage.aiModels.get(id)?.config.provider === "mistral") {
+          this.storage.aiModels.delete(id);
+        }
+      }
+      this.storage.mistralConnection.put(null);
+    });
+  }
+
   async getModelConfig(id: string): Promise<{profile: AiChatAuthorInfo, config: RedactedAiModelConfig}> {
     let {profile, config} = this.#getHandAddedModel(id, await getGatewayModels(this.env));
     return {profile, config: redactModelConfig(config)};

@@ -22,6 +22,7 @@ import {
 } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
 import { GOOGLE_MODELS } from "@earendil-works/pi-ai/providers/google.models";
 import { OPENAI_MODELS } from "@earendil-works/pi-ai/providers/openai.models";
+import { MISTRAL_MODELS } from "@earendil-works/pi-ai/providers/mistral.models";
 import { OPENCODE_GO_MODELS } from "@earendil-works/pi-ai/providers/opencode-go.models";
 import {
   ApprovalQueue, Gatekeeper, ResourceDescription, stripTrailingSlashes,
@@ -213,6 +214,7 @@ const CATALOGS: Partial<Record<AiModelProvider, Record<string, Model<Api>>>> = {
   "opencode-go": OPENCODE_GO_MODELS,
   claude: ANTHROPIC_MODELS,
   gemini: GOOGLE_MODELS,
+  mistral: MISTRAL_MODELS,
 };
 
 // Consult pi's builtin catalog for cost/compat metadata of a known model id. Unknown models are
@@ -1183,6 +1185,25 @@ function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelH
           cost: catalog?.cost ?? ZERO_COST,
           ...window,
           thinkingLevelMap: catalog?.thinkingLevelMap,
+        },
+        apiKey: config.apiToken, sessionAffinity, headers: config.extraHeaders,
+      });
+    case "mistral":
+      // The user's Mistral key rides Mistral's OpenAI-compatible chat-completions endpoint
+      // directly, like the openrouter provider's path, but against api.mistral.ai.
+      return makeHandle({
+        model: {
+          id: config.model,
+          name: catalog?.name ?? config.model,
+          api: "openai-completions",
+          provider: "mistral",
+          baseUrl: config.apiUrl ?? "https://api.mistral.ai/v1",
+          reasoning: catalog?.reasoning ?? false,
+          input: catalog?.input ?? ["text"],
+          cost: catalog?.cost ?? ZERO_COST,
+          ...window,
+          compat: {supportsStore: false, supportsDeveloperRole: false,
+            maxTokensField: "max_tokens" as const},
         },
         apiKey: config.apiToken, sessionAffinity, headers: config.extraHeaders,
       });
