@@ -17,6 +17,9 @@ export const PROVIDER_LABELS: Record<AiModelProvider, string> = {
   'opencode-go': 'OpenCode Go',
   openrouter: 'OpenRouter',
   chatgpt: 'ChatGPT',
+  claude: 'Claude (plan)',
+  copilot: 'GitHub Copilot',
+  gemini: 'Gemini (API key)',
 }
 
 /** Each reasoning level's name as the Models tab shows it. */

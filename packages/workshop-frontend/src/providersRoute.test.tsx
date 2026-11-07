@@ -14,6 +14,9 @@ const api = vi.hoisted(() => ({
   getQuickModel: async () => null,
   getChatGptAccount: async () => null,
   getOpenCodeGoAccount: async () => null,
+  getClaudeAccount: async () => null,
+  getCopilotAccount: async () => null,
+  getGeminiAccount: async () => null,
   getAiConfig: vi.fn<() => Promise<Partial<AiGatewayInfo>>>(async () => ({ enabled: false })),
   setQuickModel: vi.fn<(modelId: string | null) => Promise<void>>(async () => {}),
 }))

@@ -317,6 +317,44 @@ const JA: Record<string, string> = {
   'Show less': '折りたたむ',
   '{show} of {label}': '{label} を{show}',
   'Settings changes': '設定の変更',
+  // Connection panels: Claude (plan), GitHub Copilot, Gemini (API key).
+  'The credential file is too large.': '認証ファイルが大きすぎます。',
+  'Claude connection failed. Run the sign-in helper again and import the new file.':
+      '接続できませんでした。補助ツールで再認証して、新しいファイルを登録してください。',
+  'Claude is connected': 'Claudeに接続済み（{email}）',
+  'Connect your Claude plan to use its models. First sign-in runs a helper on your PC.':
+      'Claudeプランを接続すると、このアカウントのプランでモデルを利用できます。初回はPCでの認証が必要です。',
+  'Replace credential file': '認証ファイルを登録し直す',
+  'Disconnect Claude': 'Claudeを切断',
+  'Run the sign-in helper on the PC where this app\'s source lives, then import the file it wrote.':
+      'このアプリのソースを置いたPCで補助ツールを実行し、作成されたファイルをここで登録します。',
+  'Run the helper in a terminal:': 'ターミナルで補助ツールを実行します:',
+  'Open the URL it prints, approve your Claude plan, and let it write .local/claude-credentials.json.':
+      '表示されたURLを開いてClaudeプランの利用を許可すると、.local/claude-credentials.json が作成されます。',
+  'Import that file here:': '作成されたファイルをここで登録します:',
+  'Failed to disconnect Claude.': 'Claudeを切断できませんでした。',
+  'Close': '閉じる',
+  'GitHub Copilot is connected': 'GitHub Copilotに接続済み（{login}）',
+  'Connect your Copilot plan to use its models in chat.':
+      'Copilotプランを接続すると、チャットでそのモデルを利用できます。',
+  'Copilot sign-in could not start. Try again.': 'Copilotの接続を開始できませんでした。もう一度お試しください。',
+  'Copilot sign-in ended without completing. Start it again.':
+      'Copilotの接続が完了しませんでした。もう一度やり直してください。',
+  'Copilot sign-in timed out. Start it again.': 'Copilotの接続がタイムアウトしました。もう一度やり直してください。',
+  'Failed to disconnect GitHub Copilot.': 'GitHub Copilotを切断できませんでした。',
+  'Disconnect Copilot': 'Copilotを切断',
+  'Waiting for GitHub authorization…': 'GitHubでの認証を待っています…',
+  'Open the GitHub page, enter the code, and approve Copilot for this account.':
+      'GitHubのページを開いてコードを入力し、このアカウント向けのCopilotの利用を許可してください。',
+  'Gemini is connected': 'Geminiに接続済み（{count}モデル）',
+  'Paste a Google AI Studio API key once to add the Gemini models to chat.':
+      'Google AI StudioのAPIキーを一度登録すると、Geminiのモデルがチャットに追加されます。',
+  'Gemini API key': 'GeminiのAPIキー',
+  'Change API key': 'APIキーを変更',
+  'Only to change it': '変更する場合のみ入力',
+  'Connect Gemini': 'Geminiを接続',
+  'Disconnect Gemini': 'Geminiを切断',
+  'Failed to update the Gemini connection.': 'Geminiの接続を更新できませんでした。',
 }
 
 function readInitialLanguage(): Language {

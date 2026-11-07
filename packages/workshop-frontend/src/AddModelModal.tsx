@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, Button, Input, Select, Collapsible, useKumoToastManager } from '@cloudflare/kumo'
-import { AiChatAuthorInfo, AiModelProvider, AiGatewayInfo, RedactedAiModelConfig, SUGGESTED_MODELS, modelKind, DIRECT_ONLY_PROVIDERS } from '@gadgets/workshop-shared/api'
+import { AiChatAuthorInfo, AiModelProvider, AiGatewayInfo, RedactedAiModelConfig, SUGGESTED_MODELS, modelKind, DIRECT_ONLY_PROVIDERS, CONNECTION_MANAGED_PROVIDERS } from '@gadgets/workshop-shared/api'
 import { useI18n } from './i18n'
 import { RpcStub } from 'capnweb'
 import { AuthenticatedApi } from '@gadgets/workshop-shared/api'
@@ -45,7 +45,11 @@ const API_TOKEN_PLACEHOLDERS: Record<AiModelProvider, string> = {
   'cloudflare-auto-router': '',
   'opencode-go': 'OpenCode Go API key',
   openrouter: 'OpenRouter API key',
+  // Never shown: these providers are managed by their connections on the AI Providers page.
   chatgpt: '',
+  claude: '',
+  copilot: '',
+  gemini: '',
 }
 
 // Providers whose client can send no API key at all, so a proxy that extra headers authenticate
@@ -92,7 +96,8 @@ function buildOptions(gatewayMode: boolean, enabledProviders: Set<string> | null
   for (const provider of providerOrder) {
     // Auto Router's one model is the deployment's; it runs only through a gateway.
     if (provider === 'cloudflare-auto-router') continue
-    if (provider === 'chatgpt') continue
+    // Connection-managed providers mint their models on the AI Providers page.
+    if (CONNECTION_MANAGED_PROVIDERS.has(provider)) continue
     const directOnly = DIRECT_ONLY_PROVIDERS.has(provider)
     if (enabledProviders && !enabledProviders.has(provider) && !directOnly) continue
 

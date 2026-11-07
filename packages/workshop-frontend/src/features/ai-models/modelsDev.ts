@@ -27,6 +27,10 @@ const MODELS_DEV_PROVIDER_IDS: Record<AiModelProvider, string | null> = {
   // No model can be added under it: Auto Router is the gateway's one model of its own.
   'cloudflare-auto-router': null,
   chatgpt: null,
+  // Connection-managed providers: no model is added by hand, so models.dev suggests nothing.
+  claude: null,
+  copilot: null,
+  gemini: null,
   'opencode-go': 'opencode-go',
   openrouter: 'openrouter',
 }

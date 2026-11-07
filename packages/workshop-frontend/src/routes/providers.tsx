@@ -14,7 +14,15 @@ import {
 } from '@phosphor-icons/react'
 import AddModelModal, { type ModelModalMode } from '../AddModelModal'
 import { ChatGptConnectionPanel } from '../features/ai-models/ChatGptConnectionPanel'
+import { ClaudeConnectionPanel } from '../features/ai-models/ClaudeConnectionPanel'
+import { CopilotConnectionPanel } from '../features/ai-models/CopilotConnectionPanel'
+import { GeminiConnectionPanel } from '../features/ai-models/GeminiConnectionPanel'
 import { OpenCodeGoConnectionPanel } from '../features/ai-models/OpenCodeGoConnectionPanel'
+import { CONNECTION_MANAGED_PROVIDERS } from '@gadgets/workshop-shared/api'
+
+// A model a connection minted: edits happen on the connection, not the model form.
+const isConnectionManaged = (modelId: string): boolean =>
+  [...CONNECTION_MANAGED_PROVIDERS].some(provider => modelId.startsWith(`${provider}:`))
 import { useDocumentTitle } from '../useDocumentTitle'
 import { useCloudflareLimitsEnabled } from '../ServerConfigContext'
 import { MENU_CONTENT, MENU_ITEM, MENU_ITEM_DANGER } from '../components/menuStyles'
@@ -169,6 +177,9 @@ function ProvidersPage() {
   const [quickModel, setQuickModel] = useState<string | null>(null)
   const [aiConfig, setAiConfig] = useState<AiGatewayInfo | null>(null)
   const [chatGptAccount, setChatGptAccount] = useState<{email?: string} | null>(null)
+  const [claudeAccount, setClaudeAccount] = useState<{email?: string} | null>(null)
+  const [copilotAccount, setCopilotAccount] = useState<{login?: string} | null>(null)
+  const [geminiAccount, setGeminiAccount] = useState<{modelCount: number} | null>(null)
   const [goAccount, setGoAccount] = useState<OpenCodeGoAccountInfo | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -181,13 +192,16 @@ function ProvidersPage() {
   const fetchAll = async () => {
     setLoadError(false)
     try {
-      const [chatList, decisionList, qm, cfg, chatGpt, go] = await Promise.all([
+      const [chatList, decisionList, qm, cfg, chatGpt, go, claude, copilot, gemini] = await Promise.all([
         authenticatedApi.listModels(),
         authenticatedApi.listModels('decision'),
         authenticatedApi.getQuickModel(),
         authenticatedApi.getAiConfig(),
         authenticatedApi.getChatGptAccount(),
         authenticatedApi.getOpenCodeGoAccount(),
+        authenticatedApi.getClaudeAccount(),
+        authenticatedApi.getCopilotAccount(),
+        authenticatedApi.getGeminiAccount(),
       ])
       setChatModels(chatList)
       setDecisionModels(decisionList)
@@ -195,6 +209,9 @@ function ProvidersPage() {
       setAiConfig(cfg)
       setChatGptAccount(chatGpt)
       setGoAccount(go)
+      setClaudeAccount(claude)
+      setCopilotAccount(copilot)
+      setGeminiAccount(gemini)
       // Each dialog saves a model of the user's own, so none stays open, or opens late, once the
       // deployment says users may not add theirs.
       if (cfg.enabled && !cfg.userModelsEnabled) {
@@ -328,6 +345,18 @@ function ProvidersPage() {
           <ChatGptConnectionPanel api={authenticatedApi}
             account={chatGptAccount} canConnect={canAddModels} onChange={fetchAll} />
         )}
+        {!loading && !loadError && (canAddModels || claudeAccount !== null) && (
+          <ClaudeConnectionPanel api={authenticatedApi}
+            account={claudeAccount} canConnect={canAddModels} onChange={fetchAll} />
+        )}
+        {!loading && !loadError && (canAddModels || copilotAccount !== null) && (
+          <CopilotConnectionPanel api={authenticatedApi}
+            account={copilotAccount} canConnect={canAddModels} onChange={fetchAll} />
+        )}
+        {!loading && !loadError && (canAddModels || geminiAccount !== null) && (
+          <GeminiConnectionPanel api={authenticatedApi}
+            account={geminiAccount} canConnect={canAddModels} onChange={fetchAll} />
+        )}
         {/* Notices */}
         {(gatewayMode || (!gatewayMode && hasChatModel)) && !loading && !loadError && (
           <div className="flex flex-col gap-2.5 px-3 pb-2">
@@ -410,7 +439,7 @@ function ProvidersPage() {
                 model={model}
                 isQuick={quickModel === model.id}
                 isBuiltIn={isBuiltIn(model.id)}
-                canEdit={canAddModels && !model.id.startsWith('chatgpt:') && !goAccount?.modelIds.includes(model.id)}
+                canEdit={canAddModels && !isConnectionManaged(model.id) && !goAccount?.modelIds.includes(model.id)}
                 managed={goAccount?.modelIds.includes(model.id)}
                 onEdit={() => openWithSource('edit', model)}
                 onClone={() => openWithSource('clone', model)}
