@@ -41,6 +41,8 @@ const API_TOKEN_PLACEHOLDERS: Record<AiModelProvider, string> = {
   google: 'AIza...',
   cloudflare: 'Cloudflare API token',
   ollama: '(optional)',
+  // Never shown: Auto Router's one model is the deployment's (see AiGatewayInfo.enabledProviders).
+  'cloudflare-auto-router': '',
   'opencode-go': 'OpenCode Go API key',
   openrouter: 'OpenRouter API key',
   chatgpt: '',
@@ -88,6 +90,8 @@ function buildOptions(gatewayMode: boolean, enabledProviders: Set<string> | null
   const providerOrder = Object.keys(SUGGESTED_MODELS) as AiModelProvider[]
 
   for (const provider of providerOrder) {
+    // Auto Router's one model is the deployment's; it runs only through a gateway.
+    if (provider === 'cloudflare-auto-router') continue
     if (provider === 'chatgpt') continue
     const directOnly = DIRECT_ONLY_PROVIDERS.has(provider)
     if (enabledProviders && !enabledProviders.has(provider) && !directOnly) continue

@@ -5,7 +5,7 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcStub } from 'capnweb'
 import type {
-  ActionLogEntry, AiChatMessage, AiChatMetadata, AiChatSubscriber, Overseer,
+  ActionLogEntry, AiChatMessage, AiChatMetadata, AiChatStreamEvent, AiChatSubscriber, Overseer,
 } from '@gadgets/workshop-shared/api'
 
 vi.stubGlobal('ResizeObserver', class {
@@ -45,6 +45,10 @@ vi.mock('./AuthContext', () => {
     useOptionalAuthenticatedApi: () => null,
   }
 })
+vi.mock('./ThemeContext', async (importOriginal) => ({
+  ...await importOriginal() as typeof import('./ThemeContext'),
+  useTheme: () => ({ resolvedThemeMode: 'light' }),
+}))
 
 import {
   clickHookSwitch, deferred, entry, flushFrames, hookSwitch, makeOverseer, makeTestRoot,
@@ -77,11 +81,16 @@ function withChatApi(
       subscriber = next
       return { [Symbol.dispose]: () => {} }
     },
+    viewChat: () => ({ [Symbol.dispose]: () => {} }),
   })
   return {
     getChatMessage,
     emitMessage(message: AiChatMessage) {
       act(() => subscriber!.message(message))
+    },
+    emitStream(chatId: number, event: AiChatStreamEvent) {
+      act(() => subscriber!.stream(chatId, event))
+      flushFrames()
     },
   }
 }
@@ -166,7 +175,10 @@ const longDescription = [
 
 function pendingLog(over: Partial<Record<string, unknown>> = {}) {
   return entry(1, {
-    description: { title: 'Send email', description: longDescription, implementsRevert: false, ...over },
+    description: {
+      title: 'Send email', description: longDescription, implementsRevert: false,
+      autoApprovable: false, ...over,
+    },
   })
 }
 
@@ -399,6 +411,29 @@ describe('send and retry failures', () => {
     expect(addToast).toHaveBeenCalledExactlyOnceWith(
         { title: 'Failed to retry agent', description: undefined, variant: 'error' })
   })
+
+  it('shows a turn the user stopped as stopped, not as an error, and offers Continue', async () => {
+    const server = makeOverseer()
+    const chat = withChatApi(server, undefined, [openChat])
+    await renderChat(server.overseer, { selectedChatId: 1 })
+    chat.emitMessage({
+      chatId: 1,
+      sequence: 0,
+      timestamp: new Date(),
+      author: { type: 'agent', id: 'model', name: 'Model' },
+      type: 'error',
+      message: 'The user stopped the agent.',
+      code: 'stopped',
+    })
+
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Stopped')
+    expect(text).not.toContain('Error:')
+    expect(text).not.toContain('The user stopped the agent.')
+    const buttons = [...document.querySelectorAll('button')].map(b => b.textContent)
+    expect(buttons).toContain('Continue')
+    expect(buttons).not.toContain('Retry')
+  })
 })
 
 describe('hook toggles', () => {
@@ -493,5 +528,83 @@ describe('hook toggles', () => {
     expect(enableHook).toHaveBeenCalledTimes(2)
     await recorded(server, true)
     expect(isOn()).toBe(true)
+  })
+})
+
+describe('queued steers', () => {
+  it('shows every queued steer and hands them all to the draft on Stop', async () => {
+    const server = makeOverseer()
+    const agent = { type: 'agent', id: 'model', name: 'Model' } as const
+    withChatApi(server, undefined, [{
+      ...openChat,
+      activeAgent: agent,
+      queuedSteers: [
+        { text: 'Make it dark.', author: { type: 'user', id: 'me', name: 'Me' } },
+        { text: 'And bigger.', author: { type: 'user', id: 'collaborator', name: 'Collaborator' } },
+      ],
+    }])
+    const stopAgent = vi.fn<(chatId: number) => Promise<void>>(async () => {})
+    Object.assign(server.overseer as object, { stopAgent })
+    await renderChat(server.overseer, { selectedChatId: 1 })
+
+    const text = document.body.textContent ?? ''
+    expect(text.indexOf('Make it dark.')).toBeGreaterThan(-1)
+    expect(text.indexOf('And bigger.')).toBeGreaterThan(text.indexOf('Make it dark.'))
+    expect(text).toContain('Collaborator')
+
+    const stop = document.querySelector<HTMLButtonElement>('[aria-label="Stop agent"]')
+    if (!stop) throw new Error('No Stop button rendered')
+    await act(async () => stop.click())
+
+    const textarea = document.querySelector<HTMLTextAreaElement>('textarea[role="combobox"]')
+    expect(textarea?.value).toBe('Make it dark.\n\nAnd bigger.')
+    expect(stopAgent).toHaveBeenCalledExactlyOnceWith(1)
+  })
+})
+
+describe('live views', () => {
+  const agent = { type: 'agent', id: 'model', name: 'Model' } as const
+  const view = '<inline-html>\n<title>Spending</title>\n<p>Food: $120</p>\n</inline-html>'
+  const answer = `Here it is.\n\n${view}\n\nAsk me for more.`
+
+  beforeEach(() => {
+    // Every view is near the viewport.
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(private callback: IntersectionObserverCallback) {}
+      observe() { this.callback([{ isIntersecting: true } as IntersectionObserverEntry], this as never) }
+      disconnect() {}
+    })
+  })
+
+  // Streams `answer` in two parts, the first ending inside the block, then stores `stored`.
+  async function streamThenStore(stored: string) {
+    const server = makeOverseer()
+    const chat = withChatApi(server, undefined, [{ ...openChat, activeAgent: agent }])
+    await renderChat(server.overseer, { selectedChatId: 1 })
+    const cut = answer.indexOf('<p>')
+
+    chat.emitStream(1, { type: 'textDelta', delta: answer.slice(0, cut) })
+    const streamed = document.querySelector('iframe[title="Spending"]')
+    expect(streamed).not.toBeNull()
+
+    chat.emitStream(1, { type: 'textDelta', delta: answer.slice(cut) })
+    expect(document.querySelector('iframe[title="Spending"]')).toBe(streamed)
+
+    chat.emitMessage({ type: 'message', chatId: 1, sequence: 0, timestamp: new Date(), author: agent, message: stored })
+    flushFrames()
+    expect(document.querySelectorAll('iframe')).toHaveLength(1)
+    return { streamed, stored: document.querySelector('iframe[title="Spending"]') }
+  }
+
+  it('draws a view as its block streams, and keeps the same frame as it closes and is stored', async () => {
+    const { streamed, stored } = await streamThenStore(answer)
+    expect(stored).toBe(streamed)
+  })
+
+  it('starts the view again when the stored answer is not the text this client saw stream', async () => {
+    // As for a client that lost deltas while it reconnected.
+    const { streamed, stored } = await streamThenStore(`Earlier text. ${answer}`)
+    expect(stored).not.toBeNull()
+    expect(stored).not.toBe(streamed)
   })
 })

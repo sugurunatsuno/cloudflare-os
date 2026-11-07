@@ -24,6 +24,8 @@ const MODELS_DEV_PROVIDER_IDS: Record<AiModelProvider, string | null> = {
   google: 'google',
   cloudflare: 'cloudflare-workers-ai',
   ollama: null,
+  // No model can be added under it: Auto Router is the gateway's one model of its own.
+  'cloudflare-auto-router': null,
   chatgpt: null,
   'opencode-go': 'opencode-go',
   openrouter: 'openrouter',
