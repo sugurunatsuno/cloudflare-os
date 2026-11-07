@@ -22,6 +22,7 @@ import {
 import { useDocumentTitle } from "../useDocumentTitle";
 import { homePromptFromSearch } from "../homePrompt";
 import { composerDraftStorageKey } from "../features/chat/composer/draft/composerDraft";
+import { useI18n } from "../i18n";
 
 type HomeSearch = {
   prompt?: string;
@@ -48,7 +49,8 @@ function HomePage() {
 }
 
 export function HomePageContent({ prompt }: HomeSearch) {
-  useDocumentTitle("Home");
+  const { t } = useI18n();
+  useDocumentTitle(t("Home"));
 
   const { authenticatedApi, currentUser } = useAuthenticatedApi();
   const navigate = useNavigate();
@@ -78,7 +80,7 @@ export function HomePageContent({ prompt }: HomeSearch) {
         // Toast unless it's a connection error (reconnect refetches); a do-reset here already
         // survived the Worker's same-colo retry, so the user should hear about it.
         if (classifyRpcError(err) !== "connection") {
-          toasts.add({ title: "Couldn't load AI models", variant: "error" });
+          toasts.add({ title: t("Couldn't load AI models"), variant: "error" });
         }
       });
     return () => {
@@ -185,10 +187,10 @@ export function HomePageContent({ prompt }: HomeSearch) {
         {/* Hero */}
         <header className="text-center">
           <h1 className="text-3xl font-semibold tracking-tight leading-tight text-kumo-default sm:text-4xl">
-            What are we working on?
+            {t("What are we working on?")}
           </h1>
           <p className="mx-auto mt-3 max-w-md text-[14px] leading-5 tracking-[-0.25px] text-kumo-subtle">
-            Ask a question, create an output, or create an app that works with your tools and data.
+            {t("Ask a question, create an output, or create an app that works with your tools and data.")}
           </p>
         </header>
 
@@ -201,6 +203,8 @@ export function HomePageContent({ prompt }: HomeSearch) {
           models={models}
           selectedModel={selectedModel === null ? null : { id: selectedModel }}
           onModelChange={handleModelChange}
+          onRefreshModels={() => { authenticatedApi.listModels().then(setModels)
+            .catch(error => logRpcFailure('Failed to refresh models:', error)); }}
           newChat
           offerFormats
           autoFocus

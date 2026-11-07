@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  SUGGESTED_MODELS, type AiChatAuthorInfo, type AiModelConfig, type BuiltInReasoning,
+  SUGGESTED_MODELS, DIRECT_ONLY_PROVIDERS, type AiModelProvider, type AiChatAuthorInfo, type AiModelConfig, type BuiltInReasoning,
 } from "@gadgets/workshop-shared/api";
 import {
   Type, type AssistantMessage, type ClassifierContext, type ToolResultMessage,
@@ -46,6 +46,19 @@ const WORKERS_AI_CONFIG: AiModelConfig = {
   apiToken: "ignored-in-gateway-mode",
 };
 
+const OPENCODE_GO_CONFIG: AiModelConfig = {
+  provider: "opencode-go",
+  model: "gpt-5.6-luna",
+  apiToken: "opencode-go-token",
+  extraHeaders: {"X-Go-Client": "test-client"},
+};
+
+const OPENROUTER_CONFIG: AiModelConfig = {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiToken: "openrouter-token",
+};
+
 function env(overrides: Partial<Cloudflare.Env> = {}): Cloudflare.Env {
   return {
     CF_AI_GATEWAY: "platform-gateway",
@@ -86,6 +99,64 @@ async function captureRequest(
   expect(capturedRequests.length).toBeGreaterThan(0);
   return capturedRequests[0];
 }
+
+describe("ChatGPT plan routing", () => {
+  it("bypasses both AI gateways and ignores custom endpoints", () => {
+    const handle = getModel(env(), {provider: "chatgpt", model: "gpt-6.1-sol",
+      apiToken: "private-connection", apiUrl: "https://untrusted.example"}, INITIATOR,
+      {userGateway: {accountId: "other-account", apiKey: "gateway-key"}});
+    expect(handle.model.api).toBe("openai-responses");
+    expect(handle.model.baseUrl).toBe("https://api.openai.com/v1");
+    expect(handle.aiGatewayLogRoute).toBeUndefined();
+  });
+});
+
+describe("user-keyed external providers", () => {
+  it("uses compatible token and instruction fields for a newly discovered Go model", async () => {
+    capturedRequests.length = 0;
+    const handle = getModel(env(), {...OPENCODE_GO_CONFIG, model: "brand-new-go-model",
+      openCodeGoApi: "openai-completions", outputLimit: 1234}, INITIATOR);
+    await handle.stream(handle.model, {systemPrompt: "instructions",
+      messages: [{role: "user", content: "hello", timestamp: 0}]},
+      {fetch: fetchStub, maxRetries: 0, maxTokens: 1234}).result();
+    const payload = JSON.parse(capturedRequests[0].body);
+    expect(payload.max_tokens).toBe(1234);
+    expect(payload.max_completion_tokens).toBeUndefined();
+    expect(payload.messages[0].role).toBe("system");
+  });
+  it.each([
+    [OPENCODE_GO_CONFIG, "https://opencode.ai/inference/go/openai/v1/responses"],
+    [{...OPENCODE_GO_CONFIG, model: "gpt-6-luna"}, "https://opencode.ai/inference/go/openai/v1/responses"],
+    [{...OPENCODE_GO_CONFIG, model: "glm-5.3-flash"}, "https://opencode.ai/inference/go/openai/v1/chat/completions"],
+    [{...OPENCODE_GO_CONFIG, model: "minimax-m3"}, "https://opencode.ai/inference/go/anthropic/v1/messages"],
+    [OPENROUTER_CONFIG, "https://openrouter.ai/api/v1/chat/completions"],
+  ] as const)("bypasses gateway billing for %j", async (config, url) => {
+    capturedRequests.length = 0;
+    const handle = getModel(env(), {...config, contextWindow: 2048, outputLimit: 100}, INITIATOR, {sessionAffinity: "conversation-one",
+      userGateway: {accountId: "other-account", apiKey: "other-secret"}});
+    const request = await captureRequest(handle);
+    expect(urlWithoutQuery(request.url)).toBe(url);
+    if (handle.model.api === "anthropic-messages") {
+      expect(request.headers.get("x-api-key")).toBe(config.apiToken);
+    } else expect(request.headers.get("authorization")).toBe(`Bearer ${config.apiToken}`);
+    expect(handle.aiGatewayLogRoute).toBeUndefined();
+    expect(handle.model.contextWindow).toBe(2048);
+    expect(handle.model.maxTokens).toBe(100);
+    if (config.provider === "opencode-go") {
+      expect(request.headers.get("x-opencode-session")).toBe("conversation-one");
+      expect(request.headers.get("user-agent")).toBe("CloudflareOS/1.0");
+      expect(request.headers.get("x-go-client")).toBe("test-client");
+    }
+  });
+  it.each([
+    ["gemini-4-argon-contributor", "google-generative-ai", "https://opencode.ai/inference/go/google/v1beta"],
+    ["qwen3.8-max", "anthropic-messages", "https://opencode.ai/inference/go/anthropic"],
+  ])("uses Go's native protocol for %s", (id, api, baseUrl) => {
+    const handle = getModel(env(), {...OPENCODE_GO_CONFIG, model: id}, INITIATOR);
+    expect(handle.model.api).toBe(api);
+    expect(handle.model.baseUrl).toBe(baseUrl);
+  });
+});
 
 describe("getModel AI Gateway routing", () => {
   beforeEach(() => {
@@ -1018,7 +1089,8 @@ describe("gateway model reasoning levels", () => {
   });
 
   it("says so for every model of the catalog", () => {
-    const catalog = Object.entries(SUGGESTED_MODELS).flatMap(
+    const catalog = Object.entries(SUGGESTED_MODELS).filter(([provider]) =>
+      !DIRECT_ONLY_PROVIDERS.has(provider as AiModelProvider)).flatMap(
         ([provider, models]) => Object.keys(models).map(model => `${provider} ${model}`));
     expect(BUILT_IN.map(([provider, model]) => `${provider} ${model}`).toSorted())
         .toEqual(catalog.toSorted());

@@ -16,6 +16,7 @@ import {
   Key,
   Image as ImageIcon,
   UploadSimple,
+  ArrowClockwise,
   FilePlus,
   FolderPlus,
   User,
@@ -1566,6 +1567,7 @@ function CollectionEditor({
   const [canWrite, setCanWrite] = useState(false);
   const [supportsGitCollections, setSupportsGitCollections] = useState(false);
   const [refreshingSource, setRefreshingSource] = useState(false);
+  const [reprocessingAll, setReprocessingAll] = useState(false);
 
   // Tree ⋮ deletes route through the same in-app confirmation dialog the document toolbar uses,
   // rather than a native confirm() that breaks out of the app chrome.
@@ -1649,6 +1651,18 @@ function CollectionEditor({
       toasts.add({ title: `Failed to refresh: ${(err as Error).message}`, variant: "error" });
     } finally {
       setRefreshingSource(false);
+    }
+  };
+
+  const handleReprocessAll = async () => {
+    setReprocessingAll(true);
+    try {
+      const count = await context.reprocessAllContextDocuments(collectionId);
+      toasts.add({ title: `Started reprocessing ${count} PDF/image file${count === 1 ? "" : "s"}`, variant: "success" });
+    } catch (err) {
+      toasts.add({ title: `Failed to start reprocessing: ${(err as Error).message}`, variant: "error" });
+    } finally {
+      setReprocessingAll(false);
     }
   };
 
@@ -2083,6 +2097,14 @@ function CollectionEditor({
                 Upload files
               </DropdownMenu.Item>
               <DropdownMenu.Item
+                icon={<ArrowClockwise size={13} className="mr-2" />}
+                onClick={handleReprocessAll}
+                disabled={reprocessingAll}
+                className={MENU_ITEM}
+              >
+                Reprocess existing PDFs/images
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
                 icon={<Folder size={13} className="mr-2" />}
                 onClick={() => dirInputRef.current?.click()}
                 className={MENU_ITEM}
@@ -2380,6 +2402,7 @@ function DocumentEditor({
   const [contentType, setContentType] = useState(() => contentTypeFromPath(path));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const savedDocumentRef = useRef<{ description: string; body: string } | null>(null);
   // Documents open in View unless the caller requests Edit. For markdown, View is the rendered
@@ -2504,6 +2527,18 @@ function DocumentEditor({
     await save({ body: newBody });
   };
 
+  const reprocess = async () => {
+    setReprocessing(true);
+    try {
+      await context.reprocessContextDocument(collectionId, path);
+      toasts.add({ title: "Reprocessing started", variant: "success" });
+    } catch (err) {
+      toasts.add({ title: `Reprocessing failed: ${(err as Error).message}`, variant: "error" });
+    } finally {
+      setReprocessing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-kumo-subtle">
@@ -2563,6 +2598,18 @@ function DocumentEditor({
               }}
             />
           </label>
+        )}
+        {!readOnly && (contentType === "application/pdf" || contentType.startsWith("image/")) && (
+          <WorkshopButton
+            tone="secondary"
+            className="!h-8"
+            onClick={reprocess}
+            loading={reprocessing}
+            disabled={reprocessing}
+            title="Re-extract text and OCR"
+          >
+            <ArrowClockwise size={14} /> Reprocess
+          </WorkshopButton>
         )}
         {showModeToggle && (
           <div className="inline-flex h-8 shrink-0 items-center rounded-lg border border-kumo-line bg-kumo-fill p-0.5">

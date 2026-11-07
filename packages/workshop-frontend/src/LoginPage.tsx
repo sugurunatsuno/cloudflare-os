@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react'
+import { useI18n } from './i18n'
 import { Link } from '@tanstack/react-router'
 import { RpcStub } from 'capnweb'
 import { PublicApi } from '@gadgets/workshop-shared/api'
@@ -27,7 +28,8 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
   const serverConfigError = useServerConfigError()
   const siteName = useSiteName()
   const connectionLost = useConnectionLost()
-  useDocumentTitle('Sign in')
+  const { t } = useI18n()
+  useDocumentTitle(t('Sign in'))
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -46,10 +48,10 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
           window.location.reload()
         }
       } else {
-        setError('Invalid username or password')
+        setError(t('Invalid username or password'))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(err instanceof Error ? err.message : t('Login failed'))
     } finally {
       setLoading(false)
     }
@@ -67,9 +69,9 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
           className="flex h-full min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto bg-kumo-base px-4 py-8"
         >
           <p className="text-sm text-kumo-danger text-center">
-            Couldn&apos;t load deployment settings.
+            {t("Couldn't load deployment settings.")}
           </p>
-          <Button variant="secondary" onClick={() => window.location.reload()}>Reload</Button>
+          <Button variant="secondary" onClick={() => window.location.reload()}>{t('Reload')}</Button>
         </div>
       )
     }
@@ -77,7 +79,7 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
       <div className="flex h-full min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto bg-kumo-base px-4 py-8">
         <Loader size="lg" />
         <p className="text-sm text-kumo-subtle text-center">
-          {connectionLost ? "Can't reach the server. Retrying…" : 'Loading…'}
+          {connectionLost ? t("Can't reach the server. Retrying…") : t('Loading…')}
         </p>
       </div>
     )
@@ -108,7 +110,7 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
             </div>
           </SiteLogo>
           <h1 className="text-xl font-semibold text-kumo-default">{siteName}</h1>
-          <p className="text-sm text-kumo-subtle mt-1">Sign in to your account</p>
+          <p className="text-sm text-kumo-subtle mt-1">{t('Sign in to your account')}</p>
         </div>
 
         {passwordAuthEnabled && (
@@ -117,7 +119,7 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
                 className="w-full"
-                label="Username"
+                label={t('Username')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoFocus
@@ -129,7 +131,7 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
               <Input
                 className="w-full"
                 type="password"
-                label="Password"
+                label={t('Password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
@@ -148,7 +150,7 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
                 loading={loading}
                 className="w-full justify-center"
               >
-                Sign in
+                {t('Sign in')}
               </Button>
             </form>
 
@@ -171,7 +173,7 @@ export default function LoginPage({ rpcStub, onLoginSuccess }: LoginPageProps) {
             {passwordAuthEnabled && (
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-kumo-line" />
-                <span className="text-xs text-kumo-subtle">or</span>
+                <span className="text-xs text-kumo-subtle">{t('or')}</span>
                 <div className="h-px flex-1 bg-kumo-line" />
               </div>
             )}

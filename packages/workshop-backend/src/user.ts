@@ -1,4 +1,8 @@
 import { RpcStub } from "capnweb";
+import { DIRECT_ONLY_PROVIDERS } from "@gadgets/workshop-shared/api";
+import type { OpenCodeGoAccountInfo } from "@gadgets/workshop-shared/api";
+import { fetchOpenCodeGoModels, openCodeGoApi, OPENCODE_GO_REFRESH_MS,
+  type OpenCodeGoConnection, type OpenCodeGoModel } from "./opencode-go.js";
 import { GadgetMetadataWithTimestamps, AiChatAuthorInfo, AiModelConfig, RedactedAiModelConfig, ModelKind, modelKind, CollaboratorRole, ConnectedAccountsSubscriber, ConnectedAccountsFilter, GatekeeperVendorFilter, GadgetMetadata, BlueprintMetadata, BlueprintLibrarySummary, BlueprintSource, BlueprintUserSummary, BLUEPRINT_SCREENSHOT_R2_PREFIX, GatekeeperVendorInfo, OutputSummary, ListOutputsResult, AUTH_ERROR_CODES, createAuthError, ConnectFlowStart, validateCommitEmail, NotificationSubscriber, NotificationMute, UserNotification, type DeviceSessionHandoffStart } from '@gadgets/workshop-shared/api';
 import { ActionDescription, Gatekeeper, GatekeeperUser, GatekeeperUserVerifier, GatekeeperVendor, AccountDescription, VendorDescription, GatekeeperConnectCallback, ConnectHandoff, SupportedResource, ResourceConfiguratorFrame, AppUiContext, GatekeeperUiFrame, GatekeeperUserSelection, GatekeeperUserSelectionExchange, RedeemedGatekeeperUserSelection } from "@gadgets/workshop-shared/gatekeeper";
 import { shouldAutoProvisionAccount, ambientGatekeeperMode } from "./provisioning-policy.js";
@@ -204,6 +208,8 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
   private vendors: Map<string, Service<GatekeeperVendor>>;
   private adminSettings: DurableObjectNamespace<AdminSettings>;
   #notificationSubscribers = new Map<object, RpcStub<NotificationSubscriber>>();
+  #goRefresh?: Promise<void>;
+  #goRetryAt = 0;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -640,7 +646,9 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
   }
 
   async listModels(kind: ModelKind = "language"): Promise<AiChatAuthorInfo[]> {
-    return this.#listModels(await getGatewayModels(this.env), kind);
+    const models = await getGatewayModels(this.env);
+    if (kind === "language" && (!models || models.userModels)) await this.#syncOpenCodeGo();
+    return this.#listModels(models, kind);
   }
 
   #listModels(models: GatewayModels | null, kind: ModelKind): AiChatAuthorInfo[] {
@@ -654,8 +662,10 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
     // Also include user-configured models, where users may add their own, skipping any that a
     // gateway model shadows, whatever its mode (see #resolveModel()).
     if (models && !models.userModels) return result;
+    const go = this.storage.openCodeGo.get();
+    const retired = new Set(go?.modelIds.filter(id => !go.activeModelIds.includes(id)));
     for (let model of this.storage.aiModels.list()) {
-      if (!models?.get(model.profile.id) &&
+      if (!retired.has(model.profile.id) && !models?.get(model.profile.id) &&
           modelKind(model.config.provider, model.config.model) === kind) {
         result.push(model.profile);
       }
@@ -678,9 +688,176 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
     this.#putModel(profile, resolveWithheldSecrets(config, source), models);
   }
 
+  async importChatGpt(credentials: string): Promise<void> {
+    const models = await getGatewayModels(this.env);
+    models?.refuseUserModel();
+    const id = crypto.randomUUID();
+    const connection = this.ctx.exports.ChatGptConnection.getByName(id);
+    let catalog;
+    try { catalog = await connection.initialize(credentials); }
+    catch { await connection.disconnect(); throw new Error("ChatGPT connection failed. Run the sign-in helper again and import the new file."); }
+    const records = catalog.models.map(model => ({
+      profile: {type: "agent" as const, id: `chatgpt:${model.id}`,
+        name: `${model.name} (ChatGPT)`},
+      config: {provider: "chatgpt" as const, model: model.id, apiToken: id},
+    }));
+    if (records.some(record => models?.get(record.profile.id))) {
+      await connection.disconnect();
+      throw new Error("A deployment model is using a reserved ChatGPT model ID.");
+    }
+    const previous = this.storage.chatGptConnection.get();
+    this.ctx.storage.transactionSync(() => {
+      for (const record of this.storage.aiModels.list()) {
+        if (record.config.provider === "chatgpt") this.storage.aiModels.delete(record.profile.id);
+      }
+      for (const record of records) this.storage.aiModels.put(record);
+      this.storage.chatGptConnection.put({id, email: catalog.email});
+    });
+    if (previous) await this.ctx.exports.ChatGptConnection.getByName(previous.id).disconnect();
+  }
+
+  async getChatGptAccount(): Promise<{email?: string} | null> {
+    const connection = this.storage.chatGptConnection.get();
+    return connection ? {email: connection.email} : null;
+  }
+
+  async disconnectChatGpt(): Promise<boolean> {
+    const id = this.storage.chatGptConnection.get()?.id;
+    const revoked = id ? await this.ctx.exports.ChatGptConnection.getByName(id).disconnect() : true;
+    if (this.storage.chatGptConnection.get()?.id !== id) return revoked;
+    this.ctx.storage.transactionSync(() => {
+      for (const record of this.storage.aiModels.list()) {
+        if (record.config.provider === "chatgpt") this.storage.aiModels.delete(record.profile.id);
+      }
+      this.storage.chatGptConnection.put(null);
+    });
+    return revoked;
+  }
+
   async getModelConfig(id: string): Promise<{profile: AiChatAuthorInfo, config: RedactedAiModelConfig}> {
     let {profile, config} = this.#getHandAddedModel(id, await getGatewayModels(this.env));
     return {profile, config: redactModelConfig(config)};
+  }
+
+  #seedOpenCodeGo(): OpenCodeGoConnection | null {
+    let saved = this.storage.openCodeGo.get();
+    if (saved) return saved;
+    if (this.storage.openCodeGoMigrationCompleted.get()) return null;
+    // Only migrate ordinary Go records. Custom endpoints, headers and token limits stay hand-managed.
+    const ordinary = [...this.storage.aiModels.list()].filter(({config}) =>
+      config.provider === "opencode-go" && !!config.apiToken && !config.apiUrl &&
+      !config.extraHeaders && config.contextWindow === undefined && config.outputLimit === undefined);
+    if (!ordinary.length || new Set(ordinary.map(record => record.config.apiToken)).size !== 1) {
+      this.storage.openCodeGoMigrationCompleted.put(true);
+      return null;
+    }
+    const ids = ordinary.map(record => record.profile.id);
+    saved = {id: crypto.randomUUID(), apiToken: ordinary[0].config.apiToken,
+      modelIds: ids, activeModelIds: ids, updatedAt: 0};
+    this.ctx.storage.transactionSync(() => {
+      this.storage.openCodeGo.put(saved);
+      this.storage.openCodeGoMigrationCompleted.put(true);
+    });
+    return saved;
+  }
+
+  #goModels(saved: OpenCodeGoConnection): OpenCodeGoModel[] {
+    return saved.modelIds.flatMap(id => {
+      const record = this.storage.aiModels.get(id);
+      if (!record || record.config.provider !== "opencode-go") return [];
+      const {config, profile} = record;
+      return [{id: config.model, name: profile.name.replace(/ \(OpenCode Go\)$/, ""),
+        api: config.openCodeGoApi ?? openCodeGoApi(config.model),
+        contextWindow: config.contextWindow ?? 128000, outputLimit: config.outputLimit ?? 4096}];
+    });
+  }
+
+  #storeGoModels(saved: OpenCodeGoConnection, catalog: OpenCodeGoModel[]) {
+    const previous = saved.modelIds.flatMap(id => {
+      const record = this.storage.aiModels.get(id);
+      return record?.config.provider === "opencode-go" ? [record] : [];
+    });
+    const byModel = new Map(previous.map(record => [record.config.model, record]));
+    const activeModelIds: string[] = [];
+    this.ctx.storage.transactionSync(() => {
+      for (const model of catalog) {
+        const existing = byModel.get(model.id);
+        const id = existing?.profile.id ?? `opencode-go:${model.id}`;
+        if (!existing && this.storage.aiModels.get(id)) continue;
+        this.storage.aiModels.put({
+          profile: {type: "agent", id, name: `${model.name} (OpenCode Go)`},
+          config: {provider: "opencode-go", model: model.id, apiToken: saved.apiToken,
+            openCodeGoApi: model.api, contextWindow: model.contextWindow, outputLimit: model.outputLimit},
+        });
+        activeModelIds.push(id);
+      }
+      // Removed models remain resolvable by old conversations, but disappear from new selections.
+      for (const record of previous) {
+        if (!activeModelIds.includes(record.profile.id)) {
+          this.storage.aiModels.put({...record, config: {...record.config, apiToken: saved.apiToken}});
+        }
+      }
+      this.storage.openCodeGo.put({...saved,
+        modelIds: [...new Set(previous.map(record => record.profile.id).concat(activeModelIds))],
+        activeModelIds, updatedAt: Date.now()});
+    });
+    this.#goRetryAt = 0;
+  }
+
+  async #syncOpenCodeGo(force = false): Promise<void> {
+    const saved = this.#seedOpenCodeGo();
+    if (!saved || (!force && (Date.now() - saved.updatedAt < OPENCODE_GO_REFRESH_MS || Date.now() < this.#goRetryAt))) return;
+    if (this.#goRefresh) {
+      await this.#goRefresh;
+      if (force) return this.#syncOpenCodeGo(true);
+      return;
+    }
+    const refresh = async () => {
+      try {
+        const catalog = await fetchOpenCodeGoModels(this.#goModels(saved));
+        if (this.storage.openCodeGo.get()?.id === saved.id) this.#storeGoModels(saved, catalog);
+      } catch {
+        this.#goRetryAt = Date.now() + 60000;
+        if (force) throw new Error("Goのモデル一覧を取得できませんでした。前回の一覧は保持しています。");
+      }
+    };
+    this.#goRefresh = refresh().finally(() => { this.#goRefresh = undefined; });
+    await this.#goRefresh;
+  }
+
+  async connectOpenCodeGo(apiToken: string): Promise<void> {
+    (await getGatewayModels(this.env))?.refuseUserModel();
+    const token = apiToken.trim();
+    if (!token || token.length > 16384 || /[\r\n]/.test(token)) throw new Error("有効なGoのAPIキーを入力してください。");
+    const previous = this.#seedOpenCodeGo();
+    const catalog = await fetchOpenCodeGoModels(previous ? this.#goModels(previous) : []);
+    const current = this.storage.openCodeGo.get();
+    this.#storeGoModels({id: crypto.randomUUID(), apiToken: token,
+      modelIds: current?.modelIds ?? [], activeModelIds: [], updatedAt: 0}, catalog);
+  }
+
+  async refreshOpenCodeGoModels(): Promise<void> {
+    (await getGatewayModels(this.env))?.refuseUserModel();
+    await this.#syncOpenCodeGo(true);
+  }
+
+  async getOpenCodeGoAccount(): Promise<OpenCodeGoAccountInfo | null> {
+    const models = await getGatewayModels(this.env);
+    if (!models || models.userModels) await this.#syncOpenCodeGo();
+    const saved = this.storage.openCodeGo.get();
+    return saved ? {modelIds: saved.modelIds, modelCount: saved.activeModelIds.length,
+      updatedAt: saved.updatedAt, stale: Date.now() - saved.updatedAt >= OPENCODE_GO_REFRESH_MS} : null;
+  }
+
+  async disconnectOpenCodeGo(): Promise<void> {
+    const saved = this.storage.openCodeGo.get();
+    if (!saved) return;
+    this.ctx.storage.transactionSync(() => {
+      for (const id of saved.modelIds) {
+        if (this.storage.aiModels.get(id)?.config.provider === "opencode-go") this.storage.aiModels.delete(id);
+      }
+      this.storage.openCodeGo.put(null);
+    });
   }
 
   async updateModel(profile: AiChatAuthorInfo, config: RedactedAiModelConfig): Promise<void> {
@@ -704,7 +881,11 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
   }
 
   #putModel(profile: AiChatAuthorInfo, config: AiModelConfig, models: GatewayModels | null) {
-    if (models && !models.providers.has(config.provider)) {
+    if (this.storage.openCodeGo.get()?.modelIds.includes(profile.id)) {
+      throw new Error("Goの自動管理モデルはOpenCode Goの接続欄で管理してください。");
+    }
+    if (config.provider === "chatgpt") throw new Error("Use Continue with ChatGPT to manage ChatGPT models.");
+    if (models && !models.providers.has(config.provider) && !DIRECT_ONLY_PROVIDERS.has(config.provider)) {
       throw new Error(`Provider "${config.provider}" is not available in AI Gateway mode.`);
     }
     for (let limit of [config.contextWindow, config.outputLimit]) {
@@ -722,10 +903,18 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
   }
 
   async deleteModel(id: string): Promise<void> {
+    if (this.storage.openCodeGo.get()?.modelIds.includes(id)) {
+      throw new Error("Goの自動管理モデルはOpenCode Goの接続欄で管理してください。");
+    }
     // In AI Gateway mode, don't allow deleting the gateway's own models, whatever their mode.
     let model = (await getGatewayModels(this.env))?.get(id);
     if (model) throw new Error(`Cannot delete built-in model "${model.name}".`);
 
+    if (this.storage.aiModels.get(id)?.config.provider === "chatgpt" &&
+        [...this.storage.aiModels.list()].filter(record => record.config.provider === "chatgpt").length === 1) {
+      await this.disconnectChatGpt();
+      return;
+    }
     this.storage.aiModels.delete(id);
   }
 

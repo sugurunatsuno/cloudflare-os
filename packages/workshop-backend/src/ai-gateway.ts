@@ -1,4 +1,5 @@
 import {
+  DIRECT_ONLY_PROVIDERS,
   AdminGatewayProvider, AdminModel, AiChatAuthorInfo, AiModelConfig, AiModelProvider, GatewayModel,
   GatewayModelMode, HTTPS_ONLY_PROVIDERS, ModelKind, ReasoningLevel, SUGGESTED_MODELS, modelKind,
 } from "@gadgets/workshop-shared/api";
@@ -122,6 +123,14 @@ export class AiGatewayConfig {
     this.providers = new Set(
       (env.CF_AI_GATEWAY_PROVIDERS || "").split(",").map(s => s.trim()).filter(s => s !== "")
     );
+    const directOnly = [...this.providers].filter(provider =>
+      DIRECT_ONLY_PROVIDERS.has(provider as AiModelConfig["provider"]));
+    if (directOnly.length > 0) {
+      throw new Error(
+        `AI Gateway cannot route direct-only provider${directOnly.length > 1 ? "s" : ""}: ` +
+        `${directOnly.join(", ")}. Configure these providers on the user model instead.`,
+      );
+    }
     const httpsOnly = [...this.providers].filter(p => HTTPS_ONLY_PROVIDERS.has(p));
     if (httpsOnly.length > 0 && !this.apiToken) {
       const names = httpsOnly.join(", ");

@@ -12,6 +12,8 @@ const api = vi.hoisted(() => ({
     ? [{ type: 'agent', id: 'decision-model', name: 'Decision model' }]
     : [{ type: 'agent', id: 'chat-model', name: 'Chat model' }]),
   getQuickModel: async () => null,
+  getChatGptAccount: async () => null,
+  getOpenCodeGoAccount: async () => null,
   getAiConfig: async () => ({ enabled: false }),
   setQuickModel: vi.fn<(modelId: string | null) => Promise<void>>(async () => {}),
 }))

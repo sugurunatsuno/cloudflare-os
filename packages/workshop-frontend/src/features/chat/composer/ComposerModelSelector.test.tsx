@@ -3,7 +3,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiChatAuthorInfo } from "@gadgets/workshop-shared/api";
 import { ComposerModelSelector, type SelectedModel } from "./ComposerModelSelector";
 
@@ -23,7 +23,7 @@ afterEach(() => {
   container = null;
 });
 
-function renderTriggerLabel(selectedModel: SelectedModel): string {
+function renderTriggerLabel(selectedModel: SelectedModel, onRefreshModels?: () => void): string {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -32,12 +32,27 @@ function renderTriggerLabel(selectedModel: SelectedModel): string {
       models={models}
       selectedModel={selectedModel}
       onModelChange={() => {}}
+      onRefreshModels={onRefreshModels}
     />,
   ));
   return container.querySelector('[aria-label="Select model"]')!.textContent!;
 }
 
 describe("ComposerModelSelector", () => {
+  it("refreshes when opened and shows newly available models without changing the current selection", async () => {
+    const refresh = vi.fn<() => void>();
+    const change = vi.fn<(id: string | null) => void>();
+    const selectedModel = {id: models[0].id};
+    renderTriggerLabel(selectedModel, refresh);
+    await act(async () => container!.querySelector<HTMLButtonElement>('button')!.click());
+    expect(refresh).toHaveBeenCalledOnce();
+    await act(async () => root!.render(<ComposerModelSelector
+      models={[...models, {type: "agent", id: "opencode-go:new", name: "New Go Model"}]}
+      selectedModel={selectedModel} onModelChange={change} onRefreshModels={refresh} />));
+    expect(document.body.textContent).toContain("New Go Model");
+    expect(container!.querySelector('[aria-label="Select model"]')!.textContent).toBe(models[0].name);
+    expect(change).not.toHaveBeenCalled();
+  });
   it("labels an offered model by its listed name", () => {
     expect(renderTriggerLabel({ id: "claude-opus-5-5", name: "Stale name" })).toBe("Claude Opus 5.5");
   });

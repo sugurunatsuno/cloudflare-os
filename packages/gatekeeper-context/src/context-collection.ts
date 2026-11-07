@@ -22,6 +22,7 @@ import { obsContext } from "./observability.js";
 import {
   decodeStoredContextBody, encodeStoredContextBody, truncateContextDescription,
 } from "./context-storage.js";
+import { extractDocumentToMarkdown } from "./document-processing.js";
 
 const logger = obsContext.createLogger({
   component: "gatekeeper.context", vendorId: VENDOR_ID,
@@ -420,6 +421,78 @@ export class ContextCollectionDurableObject extends DurableObject<Cloudflare.Env
       this.storage.metadata.put(meta);
     });
     await this.#propagate();
+
+    // Preserve the uploaded binary and process it after the RPC returns. Re-uploading the source
+    // deterministically replaces the generated sibling without making upload wait for OCR.
+    if (contentType === "application/pdf" || contentType.startsWith("image/")) {
+      this.ctx.waitUntil(this.#extractAndStore(path, contentType, doc.body));
+    }
+  }
+
+  async reprocessContextDocument(path: string): Promise<void> {
+    this.#assertWebWritable();
+    validateDocumentPath(path);
+    let record = this.storage.documents.get(path);
+    if (!record) throw new Error(`Document not found: ${path}`);
+    let contentType = record.contentType ?? DEFAULT_DOCUMENT_CONTENT_TYPE;
+    if (contentType !== "application/pdf" && !contentType.startsWith("image/")) {
+      throw new Error("Only PDF and image documents can be reprocessed.");
+    }
+    this.ctx.waitUntil(this.#extractAndStore(
+      path, contentType, decodeStoredContextBody(contentType, record.body),
+    ));
+  }
+
+  async reprocessAllContextDocuments(): Promise<number> {
+    this.#assertWebWritable();
+    let count = 0;
+    for (let record of this.storage.documents.list()) {
+      let contentType = record.contentType ?? DEFAULT_DOCUMENT_CONTENT_TYPE;
+      if (contentType !== "application/pdf" && !contentType.startsWith("image/")) continue;
+      count++;
+      this.ctx.waitUntil(this.#extractAndStore(
+        record.path, contentType, decodeStoredContextBody(contentType, record.body),
+      ));
+    }
+    return count;
+  }
+
+  async #extractAndStore(path: string, contentType: string, body: string): Promise<void> {
+    try {
+      let extracted = await extractDocumentToMarkdown(
+        this.env.WORKERS_AI, baseName(path), contentType, body,
+      );
+      let extractedPath = `${path}.md`;
+      let extractedRecord = contextRecord({
+        path: extractedPath,
+        name: baseName(extractedPath),
+        description: `Extracted text from ${path} (${extracted.extractor}).`,
+        contentType: "text/markdown",
+        body: extracted.markdown,
+        lastUpdated: new Date(),
+      });
+      let extractedByteLength = extractedRecord.body.byteLength + new TextEncoder().encode(
+        JSON.stringify({ ...extractedRecord, body: "" }),
+      ).byteLength;
+      if (extractedByteLength > MAX_DOCUMENT_BODY_BYTES) {
+        throw new Error(`Extracted document is too large (${extractedByteLength} bytes).`);
+      }
+      this.storage.transaction(() => {
+        let isNew = !this.storage.documents.get(extractedPath);
+        this.#putDocument(extractedRecord);
+        let meta = this.getMetadata();
+        if (isNew) meta.documentCount++;
+        meta.lastUpdated = extractedRecord.lastUpdated;
+        this.storage.metadata.put(meta);
+      });
+      await this.#propagate();
+    } catch (error) {
+      logger.error("document extraction failed", {
+        event: "context.document.extraction.failed",
+        filepath: path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async putContextDocument(

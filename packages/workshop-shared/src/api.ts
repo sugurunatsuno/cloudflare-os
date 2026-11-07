@@ -460,6 +460,20 @@ export type DeviceSessionHandoffStart = {
 
 /** Top-level API exposed to the user after they have authenticated. */
 export interface AuthenticatedApi extends RpcTarget {
+  /** Import a local OAuth credential file to connect this user's ChatGPT plan and model catalog. */
+  importChatGpt(credentials: string): Promise<void>;
+  /** The connected ChatGPT account, without any credential or capability identifier. */
+  getChatGptAccount(): Promise<{email?: string} | null>;
+  /** Connect a personal Go key and automatically register the available Go models. */
+  connectOpenCodeGo(apiToken: string): Promise<void>;
+  /** Refresh Go's model catalog now, bypassing the five-minute local cache. */
+  refreshOpenCodeGoModels(): Promise<void>;
+  /** Connected Go account metadata, never its API key. */
+  getOpenCodeGoAccount(): Promise<OpenCodeGoAccountInfo | null>;
+  /** Remove the Go connection and its managed model configurations, preserving conversations. */
+  disconnectOpenCodeGo(): Promise<void>;
+  /** Remove ChatGPT credentials and models. False means remote revocation could not be confirmed. */
+  disconnectChatGpt(): Promise<boolean>;
   /** Get profile info for the user who is logged in. */
   whoami(): Promise<AiChatAuthorInfo>;
 
@@ -1540,7 +1554,17 @@ export type CloudflareAccountOption = {
 };
 
 /** Supported AI providers. */
-export type AiModelProvider = "openai" | "anthropic" | "google" | "cloudflare" | "ollama";
+export type AiModelProvider =
+  "openai" | "anthropic" | "google" | "cloudflare" | "ollama" | "opencode-go" | "openrouter" | "chatgpt";
+
+/**
+ * Providers that must use their own API endpoint and credentials rather than the deployment's
+ * Cloudflare AI Gateway. OpenCode Go exposes a mixed set of native API protocols, and OpenRouter
+ * is a user-keyed external OpenAI-compatible endpoint; the deployment gateway only knows how to
+ * route the built-in provider families.
+ */
+export const DIRECT_ONLY_PROVIDERS: ReadonlySet<AiModelProvider> =
+    new Set(["opencode-go", "openrouter", "chatgpt"]);
 
 /** Information about the AI gateway configuration. Returned by `AuthenticatedApi.getAiConfig()`. */
 export type AiGatewayInfo = {
@@ -1777,8 +1801,26 @@ export type GatewayModelTest = { model: string } &
  */
 export type GatewayModelLevelTest = GatewayModelTest & { reasoning: ReasoningLevel | null };
 
+/** Native inference protocols supported by OpenCode Go. */
+export type OpenCodeGoApi =
+  "openai-completions" | "openai-responses" | "anthropic-messages" | "google-generative-ai";
+
+/** Non-secret status of the user's automatically synchronized Go model catalog. */
+export type OpenCodeGoAccountInfo = {
+  /** IDs managed by the connection, including retained models no longer offered by Go. */
+  modelIds: string[];
+  /** Number of models currently offered by Go. */
+  modelCount: number;
+  /** Unix milliseconds of the last successful catalog refresh, or zero before the first. */
+  updatedAt: number;
+  /** A refresh failed or has not completed; the last successful list remains usable. */
+  stale: boolean;
+};
+
 /** Configuration specifying how to connect to an AI model provider. */
 export type AiModelConfig = {
+  /** Go's native request protocol, discovered from live model metadata. Ignored by other providers. */
+  openCodeGoApi?: OpenCodeGoApi;
   /** Which AI provider hosts the model? */
   provider: AiModelProvider;
 
@@ -1981,6 +2023,21 @@ const SUGGESTED_MODEL_CATALOG = {
     "gemini-3.6-flash": {name: "Gemini 3.6 Flash", contextWindow: 1048576},
   },
   "ollama": {
+  },
+  "chatgpt": {},
+  "opencode-go": {
+    "gpt-6-luna": {name: "GPT 6 Luna (OpenCode Go)", contextWindow: 1050000, outputLimit: 128000},
+    "gpt-5.6-luna": {name: "GPT 5.6 Luna (OpenCode Go)", contextWindow: 1050000, outputLimit: 128000},
+    "glm-5.3-flash": {name: "GLM 5.3 Flash (OpenCode Go)", contextWindow: 1000000, outputLimit: 131072},
+    "glm-5.3": {name: "GLM 5.3 (OpenCode Go)", contextWindow: 1000000, outputLimit: 131072},
+    "kimi-k3": {name: "Kimi K3 (OpenCode Go)", contextWindow: 1048576, outputLimit: 131072},
+    "kimi-k2.7-code": {name: "Kimi K2.7 Code (OpenCode Go)", contextWindow: 262144, outputLimit: 65536},
+    "deepseek-v4.1-flash": {name: "DeepSeek V4.1 Flash (OpenCode Go)", contextWindow: 1000000, outputLimit: 384000},
+    "minimax-m3": {name: "MiniMax M3 (OpenCode Go)", contextWindow: 1000000, outputLimit: 131072},
+    "qwen3.8-max": {name: "Qwen 3.8 Max (OpenCode Go)", contextWindow: 1000000, outputLimit: 131072},
+  },
+  "openrouter": {
+    "openrouter/free": {name: "OpenRouter Free Models", contextWindow: 200000},
   },
 } satisfies Record<AiModelProvider, Record<string, SuggestedModel>>;
 

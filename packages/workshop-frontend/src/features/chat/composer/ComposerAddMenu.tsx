@@ -26,6 +26,7 @@ import {
   slashCommandKey,
   type OverseerSource,
 } from "../../../components/chat/slash-command-catalog";
+import { useI18n } from "../../../i18n";
 
 type MenuLayout = {
   bottom?: number;
@@ -87,6 +88,7 @@ export default function ComposerAddMenu({
   onSelectSkill,
   onUpload,
 }: ComposerAddMenuProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [loadedCatalog, setLoadedCatalog] = useState<{
@@ -253,14 +255,14 @@ export default function ComposerAddMenu({
         value={query}
         type="text"
         role="combobox"
-        aria-label="Search skills"
+        aria-label={t("Search skills")}
         aria-autocomplete="list"
         aria-expanded="true"
         aria-controls={listboxId}
         aria-activedescendant={items[activeIndex]
           ? `${listboxId}-option-${activeIndex}`
           : undefined}
-        placeholder="Search skills…"
+        placeholder={t("Search skills…")}
         className="w-full border-0 bg-transparent p-0 text-[14px] leading-6 text-kumo-default outline-none placeholder:text-kumo-inactive"
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleKeyDown}
@@ -274,14 +276,14 @@ export default function ComposerAddMenu({
       className="themed-floating-shadow-lg fixed z-[1100] flex flex-col overflow-hidden rounded-2xl border border-kumo-line/70 bg-kumo-base"
       style={layout}
       role="dialog"
-      aria-label="Add to conversation"
+      aria-label={t("Add to conversation")}
     >
       {search}
       <div
         ref={listRef}
         id={listboxId}
         role="listbox"
-        aria-label="Files, connections, and skills"
+        aria-label={t("Files, connections, and skills")}
         aria-busy={loading}
         tabIndex={skillsAvailable ? undefined : -1}
         onKeyDown={skillsAvailable ? undefined : handleKeyDown}
@@ -308,7 +310,7 @@ export default function ComposerAddMenu({
                 onClick={() => activate(item)}
               >
                 <Icon size={16} className="shrink-0" />
-                <span>{upload ? "Upload files or photos" : "Add a new connection"}</span>
+                <span>{upload ? t("Upload files or photos") : t("Add a new connection")}</span>
               </button>
             );
           }
@@ -356,11 +358,11 @@ export default function ComposerAddMenu({
         })}
         {skillsAvailable && !loading && items.length === 0 && (
           <p className="m-0 px-3 py-8 text-center text-[13px] text-kumo-inactive">
-            {error ? "Couldn’t load skills." : "No skills match your search."}
+            {error ? t("Couldn’t load skills.") : t("No skills match your search.")}
           </p>
         )}
         {skillsAvailable && loading && catalog.length === 0 && query && (
-          <p className="m-0 px-3 py-8 text-center text-[13px] text-kumo-inactive">Loading skills…</p>
+          <p className="m-0 px-3 py-8 text-center text-[13px] text-kumo-inactive">{t("Loading skills…")}</p>
         )}
       </div>
     </div>,
@@ -373,7 +375,7 @@ export default function ComposerAddMenu({
         ref={triggerRef}
         type="button"
         disabled={disabled}
-        aria-label="Add to conversation"
+        aria-label={t("Add to conversation")}
         aria-haspopup="dialog"
         aria-expanded={open}
         className="group flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-kumo-inactive transition-[background-color,color,transform] duration-150 ease-out hover:bg-kumo-tint hover:text-kumo-subtle focus-visible:bg-kumo-tint focus-visible:text-kumo-subtle focus-visible:outline-none active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"

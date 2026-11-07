@@ -1,5 +1,7 @@
 import { RpcStub, RpcTarget, newHttpBatchRpcResponse, newWebSocketRpcSession, RpcSessionOptions } from "capnweb";
 import { validateRpc } from "capnweb-validate";
+export { ChatGptConnection } from "./chatgpt-connection.js";
+import type { OpenCodeGoAccountInfo } from "@gadgets/workshop-shared/api";
 import type { JWTPayload } from "jose";
 import { PublicApi, AuthenticatedApi, Overseer, GadgetMetadataWithTimestamps, AiChatAuthorInfo, RedactedAiModelConfig, AiGatewayInfo, AiModelProvider, ModelKind, ConnectedAccountsSubscriber, ConnectedAccountsFilter, GatekeeperVendorFilter, ObserverConfigCallback, BlueprintLibrarySummary, BlueprintPublicInfo, BlueprintUserSummary, BlueprintBindingAssignment, AgentSpawnerConfig, WorkpieceId, BLUEPRINT_SCREENSHOT_PATH_PREFIX, BLUEPRINT_SCREENSHOT_R2_PREFIX, blueprintScreenshotUrl, ServerConfig, CloudflareUsageInfo, CloudflareAccountOption, LoginAttempt, GatekeeperAppInfo, AdminApi, GatekeeperVendorInfo, OutputFormatOffer, ListOutputsResult, UserDirectoryRecord, createOpenGadgetError, getOpenGadgetErrorCode, OPEN_GADGET_ERROR_CODES, AUTH_ERROR_CODES, createAuthError, ConnectFlowStart, NotificationSubscriber, NotificationMute } from '@gadgets/workshop-shared/api';
 import type { UiFeatureFlags } from "@gadgets/workshop-shared/feature-flags";
@@ -172,6 +174,27 @@ class AuthenticatedApiImpl extends RpcTarget implements AuthenticatedApi {
   }
   listModels(kind?: ModelKind): Promise<AiChatAuthorInfo[]> {
     return retryOnDoReset(() => this.#user.listModels(kind));
+  }
+  importChatGpt(credentials: string): Promise<void> {
+    return this.#user.importChatGpt(credentials);
+  }
+  getChatGptAccount(): Promise<{email?: string} | null> {
+    return this.#user.getChatGptAccount();
+  }
+  connectOpenCodeGo(apiToken: string): Promise<void> {
+    return this.#user.connectOpenCodeGo(apiToken);
+  }
+  refreshOpenCodeGoModels(): Promise<void> {
+    return this.#user.refreshOpenCodeGoModels();
+  }
+  getOpenCodeGoAccount(): Promise<OpenCodeGoAccountInfo | null> {
+    return retryOnDoReset(() => this.#user.getOpenCodeGoAccount());
+  }
+  disconnectOpenCodeGo(): Promise<void> {
+    return this.#user.disconnectOpenCodeGo();
+  }
+  disconnectChatGpt(): Promise<boolean> {
+    return this.#user.disconnectChatGpt();
   }
   addModel(profile: AiChatAuthorInfo, config: RedactedAiModelConfig,
            copySecretsFrom?: string): Promise<void> {

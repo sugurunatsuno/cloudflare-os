@@ -13,6 +13,11 @@ declare global {
       // Workers AI binding (injected by generate-wrangler-prod / run-dev-server; not in base wrangler.jsonc).
       WORKERS_AI: Ai;
 
+      // Optional deployment-managed Codex transport. The bridge has no public routes.
+      CODEX_BRIDGE?: Fetcher;
+      CODEX_MODEL?: string;
+      CODEX_MODELS?: string;
+
       // AI Gateway mode: when CF_AI_GATEWAY is set, supported providers are routed through
       // Cloudflare AI Gateway with server-managed keys. Users don't need their own keys.
       CF_AI_GATEWAY?: string;            // Gateway name (enables gateway mode)

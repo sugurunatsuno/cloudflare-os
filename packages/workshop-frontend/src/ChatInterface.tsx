@@ -5476,6 +5476,8 @@ function ChatInterface({
             models={availableModels}
             selectedModel={selectedModel === null ? null : { id: selectedModel }}
             onModelChange={handleModelChange}
+            onRefreshModels={() => { overseer.listModels().then(setAvailableModels)
+              .catch(error => logRpcFailure('Failed to refresh models:', error)); }}
             showThinkingTraces={showThinkingTraces}
             onToggleThinkingTraces={toggleShowThinkingTraces}
             minRows={2}
@@ -6481,6 +6483,8 @@ function ChatInterface({
                       name: chatAgent?.id === selectedModel ? chatAgent.name : undefined,
                     }}
                     onModelChange={handleModelChange}
+                    onRefreshModels={() => { overseer.listModels().then(setAvailableModels)
+                      .catch(error => logRpcFailure('Failed to refresh models:', error)); }}
                     pendingConsoleLogCount={pendingConsoleLogCount}
                     consoleLogPreview={consoleLogPreview}
                     consoleLogSeverity={consoleLogSeverity}

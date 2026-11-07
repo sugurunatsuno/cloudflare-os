@@ -4,6 +4,7 @@ import { Tooltip } from '@cloudflare/kumo'
 import UserMenu from '../UserMenu'
 import { useTheme } from '../../ThemeContext'
 import type { ThemeMode } from '../../theme'
+import { useI18n } from '../../i18n'
 
 const THEME_SEQUENCE: ThemeMode[] = ['system', 'light', 'dark']
 
@@ -13,18 +14,20 @@ function nextThemeMode(mode: ThemeMode): ThemeMode {
 
 function ThemeModeButton() {
   const { themeMode, resolvedThemeMode, setThemeMode } = useTheme()
+  const { t } = useI18n()
   const label = themeMode === 'system'
-    ? `Theme: system (${resolvedThemeMode})`
-    : `Theme: ${themeMode}`
+    ? `${t('Theme: system')} (${resolvedThemeMode})`
+    : themeMode === 'light' ? t('Theme: light') : t('Theme: dark')
   const nextMode = nextThemeMode(themeMode)
+  const nextLabel = nextMode === 'light' ? t('Theme: light') : nextMode === 'dark' ? t('Theme: dark') : t('Theme: system')
 
   return (
     <Tooltip
-      content={`${label}. Switch to ${nextMode}.`}
+      content={`${label}。${t('Switch to')}${nextLabel}`}
       render={(
         <button
           type="button"
-          aria-label={`${label}. Switch to ${nextMode}.`}
+          aria-label={`${label}。${t('Switch to')}${nextLabel}`}
           onClick={() => setThemeMode(nextMode)}
           className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-kumo-inactive transition-colors hover:bg-kumo-tint hover:text-kumo-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kumo-ring focus-visible:ring-offset-2 focus-visible:ring-offset-kumo-elevated"
         >
@@ -74,6 +77,7 @@ function StripLink({
 }
 
 export default function SidebarUtilityStrip({ collapsed = false }: { collapsed?: boolean }) {
+  const { t } = useI18n()
   return (
     <div
       className={[
@@ -83,7 +87,7 @@ export default function SidebarUtilityStrip({ collapsed = false }: { collapsed?:
         collapsed ? 'flex-col justify-center gap-2 px-1.5' : '',
       ].join(' ')}
     >
-      <StripLink to="/gatekeepers" label="Gatekeepers">
+      <StripLink to="/gatekeepers" label={t('Gatekeepers')}>
         <Plug size={15} />
       </StripLink>
       <div className={collapsed ? 'flex flex-col items-center gap-2' : 'ml-auto flex items-center gap-1'}>

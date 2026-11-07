@@ -73,6 +73,12 @@
       "new_sqlite_classes": [
         "UserDirectoryDurableObject"
       ]
+    },
+    {
+      "tag": "chatgpt-v1",
+      "new_sqlite_classes": [
+        "ChatGptConnection"
+      ]
     }
   ]
 }

@@ -24,6 +24,9 @@ const MODELS_DEV_PROVIDER_IDS: Record<AiModelProvider, string | null> = {
   google: 'google',
   cloudflare: 'cloudflare-workers-ai',
   ollama: null,
+  chatgpt: null,
+  'opencode-go': 'opencode-go',
+  openrouter: 'openrouter',
 }
 
 // The longest ID or name the server accepts for an added model.

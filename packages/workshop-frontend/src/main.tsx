@@ -1,4 +1,5 @@
 import { StrictMode, useState, useEffect } from 'react'
+import { LanguageProvider } from './i18n'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
 import { RpcPromise, RpcStub, newWebSocketRpcSession } from 'capnweb'
@@ -274,7 +275,9 @@ devAutoLogin(currentStub).catch(() => {})
 root.render(
   <StrictMode>
     <FrontendErrorBoundary>
-      <AppWithConnection />
+      <LanguageProvider>
+        <AppWithConnection />
+      </LanguageProvider>
     </FrontendErrorBoundary>
   </StrictMode>
 )

@@ -2,6 +2,7 @@
 
 declare namespace Cloudflare {
   interface Env {
+    WORKERS_AI: Ai;
     // Public-collections snapshot KV.
     CONTEXT_COLLECTIONS: KVNamespace;
     // Optional Git-compatible backing repos for artifact-backed context collections.

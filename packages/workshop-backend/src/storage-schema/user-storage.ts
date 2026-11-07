@@ -11,6 +11,7 @@ import type {
 } from "@gadgets/workshop-shared/api";
 import type { AccountDescription, GatekeeperUser } from "@gadgets/workshop-shared/gatekeeper";
 import type { DeviceSessionHandoff } from "../auth/device-session-handoff.js";
+import type { OpenCodeGoConnection } from "../opencode-go.js";
 
 export type ConnectedAccountRecord = {
   id: number;
@@ -210,6 +211,10 @@ export function makeUserStorage(storage: DurableObjectStorage) {
         id: "user@example.com",
       },
       quickModel: <string | null>null,
+      // ponytail: one active ChatGPT account per user; use a keyed collection for simultaneous accounts.
+      chatGptConnection: <{id: string; email?: string} | null>null,
+      openCodeGo: <OpenCodeGoConnection | null>null,
+      openCodeGoMigrationCompleted: false,
       preferredModel: <string | null>null,
       onboardingCompleted: false,
 

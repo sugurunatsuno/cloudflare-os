@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  SUGGESTED_MODELS, type AiModelProvider, type GatewayModel, type GatewayModelCapabilities,
+  SUGGESTED_MODELS, DIRECT_ONLY_PROVIDERS, type AiModelProvider, type GatewayModel, type GatewayModelCapabilities,
 } from "@gadgets/workshop-shared/api";
 import { serializeAdminConfig } from "../src/admin-config.js";
 import { DEFAULT_ADMIN_CONFIG, type AdminConfig } from "../src/storage-schema/admin-settings-storage.js";
@@ -697,6 +697,10 @@ describe("GatewayModels", () => {
   // added model it offers is one that can run. This holds the two in step.
   it.each(Object.keys(SUGGESTED_MODELS) as AiModelProvider[])(
       "offers an added model on %s only if the gateway can route it", (provider) => {
+    if (DIRECT_ONLY_PROVIDERS.has(provider)) {
+      expect(() => gatewayModels({}, provider)).toThrow("direct-only provider");
+      return;
+    }
     const unroutable = (() => {
       try {
         getModel(gatewayEnv(provider), { provider, model: "test-model", apiToken: "" }, USER);

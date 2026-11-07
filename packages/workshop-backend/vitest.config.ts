@@ -91,6 +91,7 @@ export default defineConfig({
         // Where a blueprint's content is published to and read back from.
         r2Buckets: ['BLUEPRINT_CONTENT'],
         durableObjects: {
+          TEST_CHATGPT: { className: 'ChatGptConnection', useSQLite: true },
           TEST_OVERSEER: { className: 'OverseerDurableObject', useSQLite: true },
           TEST_USER: { className: 'UserDurableObject', useSQLite: true },
           TEST_PENDING_LOGIN: { className: 'PendingLogin', useSQLite: true },

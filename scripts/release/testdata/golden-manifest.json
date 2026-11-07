@@ -156,6 +156,10 @@
           "name": "CONTEXT_COLLECTIONS",
           "namespace_id": "$KV_CONTEXT_COLLECTIONS_ID",
           "type": "kv_namespace"
+        },
+        {
+          "name": "WORKERS_AI",
+          "type": "ai"
         }
       ],
       "compatibilityDate": "2026-09-04",
@@ -1343,6 +1347,12 @@
             "UserDirectoryDurableObject"
           ],
           "tag": "v3"
+        },
+        {
+          "new_sqlite_classes": [
+            "ChatGptConnection"
+          ],
+          "tag": "chatgpt-v1"
         }
       ],
       "modules": [

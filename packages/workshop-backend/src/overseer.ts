@@ -67,6 +67,7 @@ import {
 } from "./storage-schema/blueprints-kv";
 import { WebFetchEnv } from "./web-fetch";
 import { UserDurableObject, type UserChatContext } from "./user";
+import { DIRECT_ONLY_PROVIDERS } from "@gadgets/workshop-shared/api";
 import type { AgentSpawnerBinding, CallableAgent, SpawnCallableOptions } from "./agent-spawner-binding";
 import { recordAnalytics } from "./analytics";
 import { reportIssue } from "@gadgets/observability/error-reporting";
@@ -7134,7 +7135,7 @@ class OverseerImpl implements AgentHooks {
         // (This runs inside the try so the `finally` below still clears the active-agent state and
         // emits a stream "clear" — otherwise the UI would spin forever on a block.)
         let byokRouting: UserGatewayRouting | undefined;
-        if (this.ownerId) {
+        if (this.ownerId && !DIRECT_ONLY_PROVIDERS.has(aiModel.config.provider)) {
           let ownerStub = this.users.get(this.users.idFromString(this.ownerId));
           let usage = await checkUsageAndBalance(this.env, ownerStub);
           if (!usage.allowed) {

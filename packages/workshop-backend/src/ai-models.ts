@@ -1,4 +1,4 @@
-import { DurableObject, RpcStub, RpcTarget } from "cloudflare:workers";
+import { DurableObject, RpcStub, RpcTarget, exports } from "cloudflare:workers";
 import { validateRpc } from "capnweb-validate";
 import type {
   AnthropicMessagesCompat, Api, AssistantMessageEventStream, ClassifierApi, ClassifierContext,
@@ -22,14 +22,17 @@ import {
 } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
 import { GOOGLE_MODELS } from "@earendil-works/pi-ai/providers/google.models";
 import { OPENAI_MODELS } from "@earendil-works/pi-ai/providers/openai.models";
-import { ApprovalQueue, Gatekeeper, ResourceDescription, stripTrailingSlashes } from '@gadgets/workshop-shared/gatekeeper';
+import { OPENCODE_GO_MODELS } from "@earendil-works/pi-ai/providers/opencode-go.models";
+import {
+  ApprovalQueue, Gatekeeper, ResourceDescription, stripTrailingSlashes,
+} from '@gadgets/workshop-shared/gatekeeper';
 import { LanguageModelBinding } from "./ai-model-binding";
 import AI_MODEL_BINDING_TYPES from "./ai-model-binding.txt";
 import { DecisionAnswer, DecisionModelBinding, DecisionRequest } from "./decision-model-binding";
 import DECISION_MODEL_BINDING_TYPES from "./decision-model-binding.txt";
 import {
   AiChatAuthorInfo, AiModelConfig, AiModelProvider, BuiltInReasoning, GatewayModelCapabilities,
-  REASONING_LEVELS, ReasoningLevel, SUGGESTED_MODELS, WORKERS_AI_OUTPUT_LIMIT,
+  REASONING_LEVELS, ReasoningLevel, SUGGESTED_MODELS, WORKERS_AI_OUTPUT_LIMIT, DIRECT_ONLY_PROVIDERS,
 } from "@gadgets/workshop-shared/api";
 import { traceChat } from "./agent-tracing.js";
 import {
@@ -38,6 +41,7 @@ import {
 import { completeText } from "./ai-invoke.js";
 import { bridgePdfAttachments } from "./chat-attachment-pdf.js";
 import { hasGpt56PromptCaching, splitSystemPrompt } from "./system-prompt-blocks.js";
+import { openCodeGoApi } from "./opencode-go.js";
 
  /**
   * Routing to bill a user's own Cloudflare account for inference (BYOK path once the free tier is
@@ -149,6 +153,7 @@ const CATALOGS: Partial<Record<AiModelProvider, Record<string, Model<Api>>>> = {
   openai: OPENAI_MODELS,
   google: GOOGLE_MODELS,
   cloudflare: CLOUDFLARE_WORKERS_AI_MODELS,
+  "opencode-go": OPENCODE_GO_MODELS,
 };
 
 // Consult pi's builtin catalog for cost/compat metadata of a known model id. Unknown models are
@@ -599,6 +604,13 @@ function signGeminiFunctionCalls(model: Model<Api>, payload: unknown): object | 
 export function getModel(env: Cloudflare.Env, config: AiModelConfig,
                          initiator: AiChatAuthorInfo,
                          options: ModelRoutingOptions = {}): ModelHandle {
+  // These are direct external providers. OpenCode Go exposes several native API protocols, while
+  // OpenRouter is a user-keyed OpenAI-compatible endpoint; neither can use the built-in Cloudflare
+  // AI Gateway provider routes. Their own API keys remain scoped to the user model configuration.
+  if (DIRECT_ONLY_PROVIDERS.has(config.provider)) {
+    return getModelDirect(config, options.sessionAffinity);
+  }
+
   // BYOK: a connected user's own Cloudflare account pays for everything (all providers, including
   // Workers AI), routed through the user's own AI Gateway with unified billing. Honored regardless
   // of whether a platform AI Gateway is configured, so connected users are always billed correctly.
@@ -888,6 +900,42 @@ function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelH
         },
         ...directAuth(config, "Authorization"),
         sessionAffinity,
+      });
+    case "chatgpt":
+      return makeHandle({
+        model: {id: config.model, name: config.model, api: "openai-responses", provider: "openai",
+          baseUrl: "https://api.openai.com/v1", reasoning: true, input: ["text", "image"],
+          cost: ZERO_COST, ...window},
+        apiKey: "chatgpt", sessionAffinity,
+        fetch: (input, init) => exports.ChatGptConnection.getByName(config.apiToken)
+          .fetch(new Request(input, init)),
+      });
+    case "opencode-go": {
+      const entry = catalog;
+      const api = config.openCodeGoApi ?? openCodeGoApi(config.model);
+      const baseUrl = config.apiUrl ?? (api === "anthropic-messages"
+        ? "https://opencode.ai/inference/go/anthropic"
+        : api === "google-generative-ai" ? "https://opencode.ai/inference/go/google/v1beta"
+        : "https://opencode.ai/inference/go/openai/v1");
+      return makeHandle({
+        model: {id: config.model, name: entry?.name ?? config.model, provider: "opencode-go",
+          reasoning: true, input: ["text"], cost: ZERO_COST, ...entry,
+          ...(!entry && api === "openai-completions" ? {compat: {
+            supportsStore: false, supportsDeveloperRole: false, maxTokensField: "max_tokens" as const,
+          }} : {}),
+          api, ...window, baseUrl},
+        apiKey: config.apiToken, sessionAffinity,
+        headers: {...config.extraHeaders, "User-Agent": "CloudflareOS/1.0",
+          "x-opencode-session": sessionAffinity ?? crypto.randomUUID()},
+      });
+    }
+    case "openrouter":
+      return makeHandle({
+        model: {id: config.model, name: config.model, api: "openai-completions", provider: "openrouter",
+          baseUrl: config.apiUrl ?? "https://openrouter.ai/api/v1", reasoning: true,
+          input: ["text", "image"], cost: ZERO_COST, ...window,
+          compat: {supportsStore: false, supportsDeveloperRole: false, maxTokensField: "max_tokens"}},
+        apiKey: config.apiToken, sessionAffinity, headers: config.extraHeaders,
       });
     default:
       config.provider satisfies never;

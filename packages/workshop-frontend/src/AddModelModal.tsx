@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Dialog, Button, Input, Select, Collapsible, useKumoToastManager } from '@cloudflare/kumo'
-import { AiChatAuthorInfo, AiModelProvider, AiGatewayInfo, RedactedAiModelConfig, SUGGESTED_MODELS, modelKind } from '@gadgets/workshop-shared/api'
+import { AiChatAuthorInfo, AiModelProvider, AiGatewayInfo, RedactedAiModelConfig, SUGGESTED_MODELS, modelKind, DIRECT_ONLY_PROVIDERS } from '@gadgets/workshop-shared/api'
+import { useI18n } from './i18n'
 import { RpcStub } from 'capnweb'
 import { AuthenticatedApi } from '@gadgets/workshop-shared/api'
 import { ExtraHeadersEditor } from './features/ai-models/ExtraHeadersEditor'
@@ -40,6 +41,9 @@ const API_TOKEN_PLACEHOLDERS: Record<AiModelProvider, string> = {
   google: 'AIza...',
   cloudflare: 'Cloudflare API token',
   ollama: '(optional)',
+  'opencode-go': 'OpenCode Go API key',
+  openrouter: 'OpenRouter API key',
+  chatgpt: '',
 }
 
 // Providers whose client can send no API key at all, so a proxy that extra headers authenticate
@@ -84,10 +88,13 @@ function buildOptions(gatewayMode: boolean, enabledProviders: Set<string> | null
   const providerOrder = Object.keys(SUGGESTED_MODELS) as AiModelProvider[]
 
   for (const provider of providerOrder) {
-    if (enabledProviders && !enabledProviders.has(provider)) continue
+    if (provider === 'chatgpt') continue
+    const directOnly = DIRECT_ONLY_PROVIDERS.has(provider)
+    if (enabledProviders && !enabledProviders.has(provider) && !directOnly) continue
 
-    // In gateway mode, suggested models are already built-in, so don't list them.
-    if (!gatewayMode) {
+    // In gateway mode, suggested models are already built-in except for direct-only providers,
+    // which bypass the gateway and therefore still need to be configured by the user.
+    if ((!gatewayMode || directOnly) && provider !== 'opencode-go') {
       for (const [modelId, model] of Object.entries(SUGGESTED_MODELS[provider])) {
         if (model.hidden || (chatModelsOnly && model.kind === 'decision')) continue
         options.push({
@@ -110,6 +117,7 @@ function buildOptions(gatewayMode: boolean, enabledProviders: Set<string> | null
 
 export default function AddModelModal({ visible, onCancel, onSuccess, authenticatedApi, aiConfig, mode = { type: 'add' }, chatModelsOnly = false }: AddModelModalProps) {
   const toasts = useKumoToastManager()
+  const { t } = useI18n()
 
   // Edit and clone modes take their initial state from the source model, so the caller remounts
   // the modal (with a `key`) to switch source.
@@ -194,7 +202,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
     const newErrors: Record<string, string> = {}
 
     if (!selection) {
-      newErrors.selection = gatewayMode ? 'Please select a provider' : 'Please select a model'
+      newErrors.selection = gatewayMode ? t('Please select a provider') : t('Please select a model')
     }
 
     if (selection?.type === 'custom') {
@@ -208,7 +216,8 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
 
     const isOllama = selection?.provider === 'ollama'
     const isCloudflare = selection?.provider === 'cloudflare'
-    const showCredentials = !gatewayMode
+    const isDirectOnly = selection ? DIRECT_ONLY_PROVIDERS.has(selection.provider) : false
+    const showCredentials = !gatewayMode || isDirectOnly
 
     if (showCredentials && selection && isTokenRequired(selection.provider, headerRows) && effectiveApiToken?.trim() === '') {
       newErrors.apiToken = apiToken === null
@@ -217,11 +226,11 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
     }
 
     if (showCredentials && isCloudflare && !accountId.trim()) {
-      newErrors.accountId = 'Please enter your Cloudflare account ID'
+      newErrors.accountId = t('Please enter your Cloudflare account ID')
     }
 
     if (showCredentials && isOllama && !apiUrl.trim()) {
-      newErrors.apiUrl = 'Please enter the Ollama API URL'
+      newErrors.apiUrl = t('Please enter the Ollama API URL')
     }
 
     if (parseTokenLimit(contextWindow) === null) {
@@ -261,19 +270,22 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
       const profile: AiChatAuthorInfo = {
         type: 'agent',
         // A model's ID is its identity to chats and settings, so editing never changes it.
-        id: editing ? source!.profile.id : finalModelId,
+        id: editing ? source!.profile.id : DIRECT_ONLY_PROVIDERS.has(selection!.provider)
+          ? `${selection!.provider}:${finalModelId}` : finalModelId,
         name: finalDisplayName,
       }
 
-      const extraHeaders = gatewayMode ? undefined : headerRowsToRecord(headerRows)
+      const direct = !gatewayMode || DIRECT_ONLY_PROVIDERS.has(selection!.provider)
+      const extraHeaders = direct ? headerRowsToRecord(headerRows) : undefined
       const contextWindowTokens = parseTokenLimit(contextWindow)
       const outputLimitTokens = parseTokenLimit(outputLimit)
       const config: RedactedAiModelConfig = {
         provider: selection!.provider,
+        ...(editing && source?.config.openCodeGoApi && {openCodeGoApi: source.config.openCodeGoApi}),
         model: finalModelId,
-        apiToken: gatewayMode ? '' : effectiveApiToken?.trim() ?? null,
-        ...(!gatewayMode && accountId.trim() && { accountId: accountId.trim() }),
-        ...(!gatewayMode && apiUrl.trim() && { apiUrl: apiUrl.trim() }),
+        apiToken: direct ? effectiveApiToken?.trim() ?? null : '',
+        ...(direct && accountId.trim() && { accountId: accountId.trim() }),
+        ...(direct && apiUrl.trim() && { apiUrl: apiUrl.trim() }),
         ...(extraHeaders && { extraHeaders }),
         ...(contextWindowTokens && { contextWindow: contextWindowTokens }),
         ...(outputLimitTokens && { outputLimit: outputLimitTokens }),
@@ -303,7 +315,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
   const example = selection ? exampleModel(selection.provider) : null
   const isOllama = selection?.provider === 'ollama'
   const isCloudflare = selection?.provider === 'cloudflare'
-  const showCredentials = !gatewayMode
+  const showCredentials = !gatewayMode || (selection !== null && DIRECT_ONLY_PROVIDERS.has(selection.provider))
   const tokenRequired = selection !== null && isTokenRequired(selection.provider, headerRows)
   const title = { add: 'Add AI Model', edit: 'Edit AI Model', clone: 'Clone AI Model' }[mode.type]
 
@@ -335,9 +347,9 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
             />
           ) : (
           <Select
-            label={gatewayMode ? 'Select Provider' : 'Select Model'}
+            label={gatewayMode ? t('Select Provider') : t('Select Model')}
             className="w-full text-sm"
-            placeholder={gatewayMode ? 'Choose a provider...' : 'Choose an AI model...'}
+            placeholder={gatewayMode ? t('Choose a provider...') : t('Choose an AI model...')}
             value={selectValue}
             onValueChange={(v) => handleModelSelect(v as string)}
             error={errors.selection}
@@ -368,9 +380,9 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
           {showCustomFields && (
             <>
               <Input
-                label="Model ID"
+                label={t('Model ID')}
                 placeholder={`e.g., ${example!.modelId}`}
-                description={`The model identifier as specified by the provider (e.g., '${example!.modelId}')`}
+                description={t('The model identifier as specified by the provider (e.g., {modelId})', { modelId: example!.modelId })}
                 value={modelId}
                 disabled={editing}
                 onChange={(e) => { setModelId(e.target.value); setErrors(prev => ({ ...prev, modelId: '' })) }}
@@ -379,9 +391,9 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
               />
 
               <Input
-                label="Display Name"
+                label={t('Display Name')}
                 placeholder={`e.g., ${example!.name}`}
-                description="Human-readable name shown in the UI"
+                description={t('Human-readable name shown in the UI')}
                 value={displayName}
                 onChange={(e) => { setDisplayName(e.target.value); setErrors(prev => ({ ...prev, displayName: '' })) }}
                 error={errors.displayName}
@@ -393,9 +405,9 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
           {/* Cloudflare account ID (the Workers AI REST endpoint is account-scoped) */}
           {showCredentials && isCloudflare && (
             <Input
-              label="Cloudflare Account ID"
+              label={t('Cloudflare Account ID')}
               placeholder="e.g., 0123456789abcdef0123456789abcdef"
-              description="The Cloudflare account to bill for Workers AI usage"
+              description={t('The Cloudflare account to bill for Workers AI usage')}
               value={accountId}
               onChange={(e) => { setAccountId(e.target.value); setErrors(prev => ({ ...prev, accountId: '' })) }}
               error={errors.accountId}
@@ -411,7 +423,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
               placeholder={tokenRequired ? API_TOKEN_PLACEHOLDERS[selection.provider] : '(optional)'}
               description={
                 isOllama
-                  ? 'Optional for local Ollama access'
+                  ? t('Optional for local Ollama access')
                   : isCloudflare
                   ? 'An API token with Workers AI Read + Edit permissions (in the dashboard: Workers AI > Use REST API > Create a Workers AI API Token)'
                   : TOKEN_OPTIONAL_WITH_HEADERS.has(selection.provider)
@@ -427,9 +439,9 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
           {/* Ollama API URL (always visible for Ollama) */}
           {showCredentials && isOllama && (
             <Input
-              label="API URL"
+              label={t('API URL')}
               placeholder="http://localhost:11434"
-              description="URL of your Ollama server"
+              description={t('URL of your Ollama server')}
               value={apiUrl}
               onChange={(e) => { setApiUrl(e.target.value); setErrors(prev => ({ ...prev, apiUrl: '' })) }}
               error={errors.apiUrl}
@@ -442,7 +454,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
               open={advancedOpen}
               onOpenChange={setAdvancedOpen}
             >
-              <Collapsible.DefaultTrigger>Advanced Settings</Collapsible.DefaultTrigger>
+              <Collapsible.DefaultTrigger>{t('Advanced Settings')}</Collapsible.DefaultTrigger>
               <Collapsible.DefaultPanel>
                 <div className="space-y-4">
                   {/* Ollama shows its API URL above; Workers AI's endpoint is derived from the account ID. */}
@@ -498,7 +510,7 @@ export default function AddModelModal({ visible, onCancel, onSuccess, authentica
         <div className="mt-6 flex justify-end gap-2">
           <Dialog.Close render={(props) => (
             <Button variant="secondary" {...props} disabled={loading}>
-              Cancel
+              {t('Cancel')}
             </Button>
           )} />
           <Button

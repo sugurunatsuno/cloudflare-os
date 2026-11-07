@@ -15,6 +15,7 @@ import { OverseerDurableObject as RealOverseerDurableObject } from "../src/serve
 import { FakeChatResponseTarget } from "./response-target";
 
 export * from "../src/server.js";
+export { ChatGptConnection } from "../src/chatgpt-connection.js";
 export { default } from "../src/server.js";
 
 /**

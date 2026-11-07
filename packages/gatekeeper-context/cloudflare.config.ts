@@ -9,6 +9,7 @@ export default defineGadgetsWorker({
   compatibilityFlags: ["nodejs_compat", "allow_irrevocable_stub_storage"],
 
   env: {
+    WORKERS_AI: bindings.ai(),
     // Public-collections snapshot KV. The preview id in `wrangler` preserves existing dev data.
     CONTEXT_COLLECTIONS: bindings.kv(),
     // Optional: add an Artifacts binding named ARTIFACTS to enable Git-backed collections.

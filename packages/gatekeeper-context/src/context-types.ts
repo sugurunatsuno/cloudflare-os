@@ -350,6 +350,8 @@ export interface ContextApi extends RpcTarget {
   createContextSkill(collectionId: string, path: string, doc: {
     description: string; body: string; contentType?: string;
   }): Promise<void>;
+  reprocessContextDocument(collectionId: string, path: string): Promise<void>;
+  reprocessAllContextDocuments(collectionId: string): Promise<number>;
   deleteContextDocument(collectionId: string, path: string): Promise<void>;
   /** Atomically deletes a skill and its supporting files. */
   deleteContextSkill(collectionId: string, manifestPath: string): Promise<void>;

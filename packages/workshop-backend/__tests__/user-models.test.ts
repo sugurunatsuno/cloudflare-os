@@ -377,6 +377,8 @@ describe("UserDurableObject gateway model modes", () => {
       await expect(user.addModel(other, otherConfig)).rejects.toThrow(refused);
       await expect(user.addModel(other, otherConfig, "nope")).rejects.toThrow(refused);
       await expect(user.addModel(MINE, MINE_CONFIG)).rejects.toThrow(refused);
+      await expect(user.connectOpenCodeGo("personal-key")).rejects.toThrow(refused);
+      await expect(user.refreshOpenCodeGoModels()).rejects.toThrow(refused);
       await expect(user.addModel({ ...MINE, id: ENABLED_ID }, MINE_CONFIG))
           .rejects.toThrow(refused);
       expect(storedModel(user, "other")).toBeUndefined();
