@@ -1459,6 +1459,13 @@
             "ChatGptConnection"
           ],
           "tag": "chatgpt-v1"
+        },
+        {
+          "new_sqlite_classes": [
+            "ClaudeConnection",
+            "CopilotConnection"
+          ],
+          "tag": "connections-v1"
         }
       ],
       "modules": [
