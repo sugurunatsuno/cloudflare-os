@@ -7,6 +7,7 @@ import type {
   NotificationSubscriber,
   UserNotification,
 } from "@gadgets/workshop-shared/api";
+import { useI18n } from "../../i18n";
 import { logRpcFailure } from "../../rpcErrors";
 import { nativeApp } from "../native-app/nativeApp";
 import { registerNativeNotificationEnrollment } from "./nativeNotificationEnrollment";
@@ -58,6 +59,7 @@ export const NotificationBridge = ({
   authenticatedApi: RpcStub<AuthenticatedApi>;
 }) => {
   const toasts = useKumoToastManager();
+  const { t } = useI18n();
   const addToast = useRef(toasts.add);
   addToast.current = toasts.add;
   const router = useRouter();
@@ -215,10 +217,12 @@ export const NotificationBridge = ({
         let completed = kind === "taskCompleted";
         addToast.current({
           id,
-          title: `${chatTitle || "Task"} ${completed ? "completed" : "needs permission"}`,
+          title: completed
+            ? t('{chat} completed', { chat: chatTitle || t('Task') })
+            : t('{chat} needs your permission', { chat: chatTitle || t('Task') }),
           variant: completed ? "success" : "info",
           actions: [{
-            children: "Open task",
+            children: t('Open task'),
             onClick: () => router.navigate({
               to: "/workspace/$id",
               params: { id: workspaceId },

@@ -2,6 +2,7 @@ import { DropdownMenu, useKumoToastManager } from '@cloudflare/kumo'
 import { Bell, BellSlash } from '@phosphor-icons/react'
 import type { NotificationMute } from '@gadgets/workshop-shared/api'
 import { useAuthenticatedApi } from '../../AuthContext'
+import { useI18n } from '../../i18n'
 import { MENU_CONTENT, MENU_ITEM, MENU_POSITIONER_STYLE } from '../../components/menuStyles'
 import { logRpcFailure } from '../../rpcErrors'
 import { describeMute } from './notificationMute'
@@ -33,6 +34,7 @@ export const WorkspaceNotificationsMenu = ({ workspaceId, mute, onMuteChange }: 
   mute?: NotificationMute
   onMuteChange: (mute: NotificationMute | undefined) => void
 }) => {
+  const { t } = useI18n()
   const { authenticatedApi } = useAuthenticatedApi()
   const toasts = useKumoToastManager()
 
@@ -42,14 +44,14 @@ export const WorkspaceNotificationsMenu = ({ workspaceId, mute, onMuteChange }: 
       onMuteChange(next)
     } catch (error) {
       logRpcFailure('Failed to update workspace notifications:', error)
-      toasts.add({ title: 'Failed to update notifications', variant: 'error' })
+      toasts.add({ title: t('Failed to update notifications'), variant: 'error' })
     }
   }
 
   if (describeMute(mute)) {
     return (
       <DropdownMenu.Item onClick={() => setMute(undefined)} className={MENU_ITEM}>
-        <Bell size={13} /> Unmute notifications
+        <Bell size={13} /> {t('Unmute notifications')}
       </DropdownMenu.Item>
     )
   }
@@ -57,16 +59,16 @@ export const WorkspaceNotificationsMenu = ({ workspaceId, mute, onMuteChange }: 
   return (
     <DropdownMenu.Sub>
       <DropdownMenu.SubTrigger className={MENU_ITEM}>
-        <BellSlash size={13} /> Mute notifications
+        <BellSlash size={13} /> {t('Mute notifications')}
       </DropdownMenu.SubTrigger>
       <DropdownMenu.SubContent className={MENU_CONTENT} style={MENU_POSITIONER_STYLE}>
         <DropdownMenu.Group>
           <DropdownMenu.Label className="!px-2.5 !py-1.5 text-[12px] text-kumo-subtle">
-            Still notifies when a task needs your permission
+            {t('Still notifies when a task needs your permission')}
           </DropdownMenu.Label>
           {MUTE_CHOICES.map(([label, choose]) => (
             <DropdownMenu.Item key={label} onClick={() => setMute(choose())} className={MENU_ITEM}>
-              {label}
+              {t(label)}
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Group>

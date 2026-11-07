@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { Autocomplete, Button, Combobox } from '@cloudflare/kumo'
 import { X } from '@phosphor-icons/react'
+import { useI18n } from '../../i18n'
 import { AUDIT_METHOD_GROUPS, type AuditFilter, type AuditMethod } from './auditFilter'
 
 // The Action filter's choices: each group's methods, in alphabetical order, as Base UI groups them.
@@ -19,6 +20,7 @@ export const AuditFilters = ({ filter, adminSuggestions, onFilterChange }: {
   adminSuggestions: string[]
   onFilterChange: (filter: AuditFilter) => void
 }) => {
+  const { t } = useI18n()
   // What is typed in the admin field, for the admin filter it was typed over. Dropped as soon as the
   // filter changes from elsewhere (an admin's name picked in the log), during that render, so the
   // field shows the new filter and coming back to the old one does not bring back what was typed.
@@ -46,10 +48,10 @@ export const AuditFilters = ({ filter, adminSuggestions, onFilterChange }: {
   const adminField = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="flex flex-wrap items-end gap-3" role="search" aria-label="Filter admin activity">
+    <div className="flex flex-wrap items-end gap-3" role="search" aria-label={t('Filter admin activity')}>
       <div ref={adminField} className="w-full sm:w-72" onKeyDown={applyOnEnter}>
         <Autocomplete<string>
-          label="Admin"
+          label={t('Admin')}
           items={adminSuggestions}
           value={adminText}
           onValueChange={(text, { reason }) => {
@@ -64,7 +66,7 @@ export const AuditFilters = ({ filter, adminSuggestions, onFilterChange }: {
             if (reason === 'item-press') applyAdmin(text)
           }}
         >
-          <Autocomplete.InputGroup placeholder="Any admin (press Enter to filter)" />
+          <Autocomplete.InputGroup placeholder={t('Any admin (press Enter to filter)')} />
           <Autocomplete.Content>
             <Autocomplete.List>
               {(admin: string) => (
@@ -76,18 +78,18 @@ export const AuditFilters = ({ filter, adminSuggestions, onFilterChange }: {
       </div>
       <div className="w-full sm:w-80">
         <Combobox
-          label="Action"
+          label={t('Action')}
           items={ACTION_GROUPS}
           value={filter.method ?? null}
           onValueChange={(method) => onFilterChange({ ...filter, method: (method as AuditMethod | null) ?? undefined })}
         >
-          <Combobox.TriggerInput placeholder="Any action (type to search)" clearLabel="Any action" />
+          <Combobox.TriggerInput placeholder={t('Any action (type to search)')} clearLabel={t('Any action')} />
           <Combobox.Content>
-            <Combobox.Empty>No action matches.</Combobox.Empty>
+            <Combobox.Empty>{t('No action matches.')}</Combobox.Empty>
             <Combobox.List>
               {(group: ActionGroup) => (
                 <Combobox.Group key={group.value} items={group.items}>
-                  <Combobox.GroupLabel>{group.value}</Combobox.GroupLabel>
+                  <Combobox.GroupLabel>{t(group.value)}</Combobox.GroupLabel>
                   <Combobox.Collection>
                     {(method: AuditMethod) => (
                       <Combobox.Item key={method} value={method}>
@@ -111,7 +113,7 @@ export const AuditFilters = ({ filter, adminSuggestions, onFilterChange }: {
             adminField.current?.querySelector<HTMLInputElement>('[role="combobox"]')?.focus()
           }}
         >
-          Clear filters
+          {t('Clear filters')}
         </Button>
       )}
     </div>

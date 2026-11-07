@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { Button } from '@cloudflare/kumo'
+import { useI18n } from '../../i18n'
 
 // Past this many characters or lines, a value may not fit the six lines it is clamped to.
 const CLAMP_CHARACTERS = 480
@@ -32,6 +33,7 @@ const layOut = (value: string) => {
  * show nothing, says "empty".
  */
 export const AuditValue = ({ value, label }: { value: string | undefined; label: string }) => {
+  const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const valueId = useId()
   if (value === undefined) {
@@ -62,10 +64,10 @@ export const AuditValue = ({ value, label }: { value: string | undefined; label:
           className="mt-1"
           aria-expanded={expanded}
           aria-controls={valueId}
-          aria-label={`${expanded ? 'Show less' : 'Show all'} of ${label}`}
+          aria-label={t('{show} of {label}', { show: expanded ? t('Show less') : t('Show all'), label })}
           onClick={() => setExpanded((open) => !open)}
         >
-          {expanded ? 'Show less' : 'Show all'}
+          {expanded ? t('Show less') : t('Show all')}
         </Button>
       )}
     </span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Switch, useKumoToastManager } from "@cloudflare/kumo";
 import { useAuthenticatedApi } from "../../AuthContext";
+import { useI18n } from "../../i18n";
 import { useServerConfig } from "../../ServerConfigContext";
 import { logRpcFailure } from "../../rpcErrors";
 import {
@@ -15,6 +16,7 @@ const readStatus = async (userId: string): Promise<Status> =>
 
 /** The profile page's notification settings: whether this browser shows push notifications. */
 export const NotificationSettings = () => {
+  const { t } = useI18n();
   const { authenticatedApi, currentUser, isCurrentUserConfirmed } = useAuthenticatedApi();
   const publicKey = useServerConfig()?.webPushPublicKey;
   const toasts = useKumoToastManager();
@@ -47,7 +49,7 @@ export const NotificationSettings = () => {
       }
     } catch (error) {
       logRpcFailure("Failed to update browser notifications:", error);
-      toasts.add({ title: "Failed to update browser notifications", variant: "error" });
+      toasts.add({ title: t("Failed to update browser notifications"), variant: "error" });
       setStatus(await readStatus(userId));
     } finally {
       setPending(false);
@@ -57,13 +59,13 @@ export const NotificationSettings = () => {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="px-1 text-[12px] font-medium uppercase tracking-[0.08em] text-kumo-inactive">
-        Notifications
+        {t('Notifications')}
       </h2>
       <div className="rounded-xl border border-kumo-line bg-kumo-base p-5">
         {support === "supported" ? (
           <div className="flex flex-col gap-2">
             <Switch
-              label="Browser notifications"
+              label={t('Browser notifications')}
               checked={status === "on"}
               disabled={status === "loading" || status === "denied" || pending}
               transitioning={pending}
@@ -71,17 +73,17 @@ export const NotificationSettings = () => {
             />
             <p className="text-sm text-kumo-subtle">
               {status === "on"
-                ? "This browser shows a notification when a task finishes or needs your permission while no Workshop tab is in view."
+                ? t("This browser shows a notification when a task finishes or needs your permission while no Workshop tab is in view.")
                 : status === "denied"
-                  ? "Notifications are blocked for this site in your browser's settings."
-                  : "Get a notification in this browser when a task finishes or needs your permission while no Workshop tab is in view."}
+                  ? t("Notifications are blocked for this site in your browser's settings.")
+                  : t("Get a notification in this browser when a task finishes or needs your permission while no Workshop tab is in view.")}
             </p>
           </div>
         ) : (
           <p className="text-sm text-kumo-subtle">
             {support === "appleMobile"
-              ? "On iPhone and iPad, notifications come from the Cloudflare OS app."
-              : "Browser notifications aren't available on Android yet."}
+              ? t("On iPhone and iPad, notifications come from the Cloudflare OS app.")
+              : t("Browser notifications aren't available on Android yet.")}
           </p>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useKumoToastManager } from '@cloudflare/kumo'
+import { useI18n } from '../../i18n'
 import { useSiteName } from '../../ServerConfigContext'
 import { entryScriptOf, fetchEntryScript, reloadPage } from './versionChecks'
 import { useSessionCheck } from './useSessionCheck'
@@ -10,6 +11,7 @@ import { useSessionCheck } from './useSessionCheck'
  * once per new frontend, on the session checks. Renders nothing itself.
  */
 export const PageUpdateNotice = () => {
+  const { t } = useI18n()
   const siteName = useSiteName()
   // The manager is a new object on every render, so the check reads it through a ref.
   const toasts = useKumoToastManager()
@@ -31,12 +33,12 @@ export const PageUpdateNotice = () => {
       notified.current = {
         entryScript: latest,
         toastId: toastsRef.current.add({
-          title: `${siteName} was updated`,
-          description: 'Reload to use the new version.',
+          title: t('{site} was updated', { site: siteName }),
+          description: t('Reload to use the new version.'),
           variant: 'info',
           timeout: 0,
           actions: [{
-            children: 'Reload',
+            children: t('Reload'),
             variant: 'primary',
             onClick: reloadPage,
           }],

@@ -3,6 +3,7 @@ import { Button, Loader, Table } from '@cloudflare/kumo'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import type { RpcStub } from 'capnweb'
 import type { AdminApi, AdminAuditPage } from '@gadgets/workshop-shared/api'
+import { useI18n } from '../../i18n'
 import { logRpcFailure } from '../../rpcErrors'
 import type { AuditFilter } from './auditFilter'
 import { AuditFilters } from './AuditFilters'
@@ -51,6 +52,7 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
    * whose retention may have removed the pages turned to). */
   restarts: number
 }) => {
+  const { t } = useI18n()
   const key = filterKey(filter)
   // The cursors of the pages turned to under the current filter and restart, oldest page last.
   // Forgotten as soon as either changes, during that render, so that coming back to an earlier
@@ -112,7 +114,7 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
     Object.values<number>(columns.widths).reduce((sum, width) => sum + width, 0)
   const head = (column: ResizableColumn) => (
     <Table.Head>
-      {RESIZABLE_COLUMNS[column]}
+      {t(RESIZABLE_COLUMNS[column])}
       <ColumnResizeHandle
         column={RESIZABLE_COLUMNS[column]}
         width={columns.widths[column]}
@@ -143,9 +145,9 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
       )}
       {failed && (
         <div className="py-8 text-center">
-          <p role="alert" className="text-sm text-kumo-danger">Couldn’t load the admin audit log.</p>
+          <p role="alert" className="text-sm text-kumo-danger">{t('Couldn’t load the admin audit log.')}</p>
           <Button variant="secondary" size="sm" className="mt-3" onClick={() => setRetries((n) => n + 1)}>
-            Retry
+            {t('Retry')}
           </Button>
         </div>
       )}
@@ -164,11 +166,11 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
               </colgroup>
               <Table.Header>
                 <Table.Row>
-                  <Table.Head><span className="sr-only">Details</span></Table.Head>
+                  <Table.Head><span className="sr-only">{t('Details')}</span></Table.Head>
                   {head('time')}
                   {head('admin')}
                   {head('action')}
-                  <Table.Head>Changes</Table.Head>
+                  <Table.Head>{t('Changes')}</Table.Head>
                   {head('via')}
                 </Table.Row>
               </Table.Header>
@@ -178,10 +180,10 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
                     <Table.Row>
                       <Table.Cell colSpan={AUDIT_LOG_COLUMNS} className="py-8 text-center text-kumo-subtle">
                         {pageNumber > 1
-                          ? 'No older admin activity.'
+                          ? t('No older admin activity.')
                           : filter.admin !== undefined || filter.method !== undefined
-                            ? 'No admin activity matches these filters.'
-                            : 'No admin activity is recorded yet.'}
+                            ? t('No admin activity matches these filters.')
+                            : t('No admin activity is recorded yet.')}
                       </Table.Cell>
                     </Table.Row>
                   )
@@ -197,7 +199,7 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
             </Table>
           </div>
           {(pageNumber > 1 || nextCursor !== undefined) && (
-            <nav className="flex items-center justify-between gap-4" aria-label="Audit log pages">
+            <nav className="flex items-center justify-between gap-4" aria-label={t('Audit log pages')}>
               <Button
                 ref={newerButton}
                 variant="secondary"
@@ -206,9 +208,9 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
                 disabled={pageNumber === 1}
                 onClick={() => { if (!busy) turnTo(cursors.slice(0, -1)) }}
               >
-                Newer
+                {t('Newer')}
               </Button>
-              <span className="text-sm text-kumo-subtle" aria-live="polite">Page {pageNumber}</span>
+              <span className="text-sm text-kumo-subtle" aria-live="polite">{t('Page {number}', { number: pageNumber })}</span>
               <Button
                 ref={olderButton}
                 variant="secondary"
@@ -216,7 +218,7 @@ export const AuditLog = ({ admin, filter, onFilterChange, adminSuggestions, relo
                 disabled={nextCursor === undefined}
                 onClick={() => { if (!busy && nextCursor !== undefined) turnTo([...cursors, nextCursor]) }}
               >
-                Older
+                {t('Older')}
                 <CaretRight aria-hidden="true" />
               </Button>
             </nav>

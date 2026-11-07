@@ -11,6 +11,7 @@ import type { RpcPromise, RpcStub } from 'capnweb'
 import type { AuthenticatedApi, UserDirectoryRecord } from '@gadgets/workshop-shared/api'
 import { PersonAvatar } from '../../components/PersonAvatar'
 import { isImeComposing } from '../../keyboardEvent'
+import { useI18n } from '../../i18n'
 import { useUserDirectorySearch } from './useUserDirectorySearch'
 
 /** Observable state of the current debounced directory search. */
@@ -55,6 +56,7 @@ export function UserSearchCombobox({
   onSubmit,
   onSearchStateChange,
 }: Props) {
+  const { t } = useI18n()
   const query = value.trim()
   const searching = searchEnabled && !disabled && !selected && query !== ''
   const directory = useUserDirectorySearch({ query, enabled: searching, search })
@@ -132,8 +134,8 @@ export function UserSearchCombobox({
         ref={inputRef}
         type="search"
         role={searchEnabled ? 'combobox' : undefined}
-        placeholder={searchEnabled ? 'Search by name or email' : 'Username or email'}
-        aria-label={searchEnabled ? 'Search people' : 'Username or email'}
+        placeholder={searchEnabled ? t('Search by name or email') : t('Username or email')}
+        aria-label={searchEnabled ? t('Search people') : t('Username or email')}
         aria-autocomplete={searchEnabled ? 'list' : undefined}
         aria-expanded={searchEnabled ? open : undefined}
         aria-controls={open ? listboxId : undefined}
@@ -163,25 +165,25 @@ export function UserSearchCombobox({
       />
       {!searchEnabled && !disabled && !selected && query !== '' && (
         <button type="button" onClick={submitCurrentIdentifier} className="mt-2 text-[13px] underline">
-          Select {query}
+          {t('Select {value}', { value: query })}
         </button>
       )}
       {open && (
         <div
           id={listboxId}
           role="listbox"
-          aria-label="Matching people"
+          aria-label={t('Matching people')}
           aria-busy={searchState.status === 'loading'}
           className="mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-kumo-line/70 bg-kumo-base p-2"
         >
           {searchState.status === 'loading' ? (
-            <p role="status" className="px-3 py-2 text-[12px] text-kumo-subtle">Searching…</p>
+            <p role="status" className="px-3 py-2 text-[12px] text-kumo-subtle">{t('Searching…')}</p>
           ) : searchState.status === 'failed' ? (
             <p role="status" className="px-3 py-2 text-[12px] text-kumo-danger">
-              User search is temporarily unavailable.
+              {t('User search is temporarily unavailable.')}
             </p>
           ) : results.length === 0 ? (
-            <p role="status" className="px-3 py-2 text-[12px] text-kumo-subtle">No users found.</p>
+            <p role="status" className="px-3 py-2 text-[12px] text-kumo-subtle">{t('No users found.')}</p>
           ) : results.map((user, index) => (
             <button
               key={user.id}

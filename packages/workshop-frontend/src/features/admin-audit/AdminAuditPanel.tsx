@@ -5,6 +5,7 @@ import type { RpcStub } from 'capnweb'
 import { MAX_ADMIN_AUDIT_RETENTION_DAYS } from '@gadgets/workshop-shared/api'
 import type { AdminApi, AdminAuditStats } from '@gadgets/workshop-shared/api'
 import { DurationSetting } from '../../components/DurationSetting'
+import { useI18n } from '../../i18n'
 import { logRpcFailure, rpcFailureDescription } from '../../rpcErrors'
 import type { AuditFilter } from './auditFilter'
 import { AuditLog } from './AuditLog'
@@ -43,19 +44,23 @@ type StatsAnswer = { loads: number } & ({ stats: AdminAuditStats } | { failed: t
 const StatsCards = ({ stats, onAdminSelect }: {
   stats: AdminAuditStats
   onAdminSelect: (admin: string) => void
-}) => (
+}) => {
+  const { t } = useI18n()
+  return (
   <div className="grid items-start gap-6 md:grid-cols-2">
     <div className={CARD}>
-      <h3 className="text-lg font-semibold text-kumo-strong mb-1">Admin actions, last {stats.days} days</h3>
+      <h3 className="text-lg font-semibold text-kumo-strong mb-1">
+        {t('Admin actions, last {days} days', { days: stats.days })}
+      </h3>
       <p className="text-sm text-kumo-subtle mb-4">
         <span className="text-2xl font-semibold text-kumo-default tabular-nums">{NUMBER.format(stats.totalEvents)}</span>
-        {' '}{stats.totalEvents === 1 ? 'action' : 'actions'}, by UTC day
+        {' '}{stats.totalEvents === 1 ? t('action') : t('actions')}, {t('by UTC day')}
       </p>
       <Table>
         <Table.Header>
           <Table.Row>
-            <Table.Head>Day</Table.Head>
-            <Table.Head className="text-right">Actions</Table.Head>
+            <Table.Head>{t('Day')}</Table.Head>
+            <Table.Head className="text-right">{t('Actions')}</Table.Head>
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -70,18 +75,18 @@ const StatsCards = ({ stats, onAdminSelect }: {
     </div>
 
     <div className={CARD}>
-      <h3 className="text-lg font-semibold text-kumo-strong mb-1">Most active admins</h3>
+      <h3 className="text-lg font-semibold text-kumo-strong mb-1">{t('Most active admins')}</h3>
       <p className="text-sm text-kumo-subtle mb-4">
-        By actions in the last {stats.days} days. Choose an admin to see only their activity.
+        {t('By actions in the last {days} days. Choose an admin to see only their activity.', { days: stats.days })}
       </p>
       {stats.topAdmins.length === 0
-        ? <p className="text-sm text-kumo-subtle">No admin activity in this window.</p>
+        ? <p className="text-sm text-kumo-subtle">{t('No admin activity in this window.')}</p>
         : (
           <Table>
             <Table.Header>
               <Table.Row>
-                <Table.Head>Admin</Table.Head>
-                <Table.Head className="text-right">Actions</Table.Head>
+                <Table.Head>{t('Admin')}</Table.Head>
+                <Table.Head className="text-right">{t('Actions')}</Table.Head>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -92,7 +97,7 @@ const StatsCards = ({ stats, onAdminSelect }: {
                       variant="ghost"
                       size="sm"
                       className="-ml-2 max-w-full text-base"
-                      aria-label={`Show only ${admin}’s activity`}
+                      aria-label={t('Show only {admin}’s activity', { admin })}
                       onClick={() => onAdminSelect(admin)}
                     >
                       <span className="truncate">{admin}</span>
@@ -106,13 +111,15 @@ const StatsCards = ({ stats, onAdminSelect }: {
         )}
     </div>
   </div>
-)
+  )
+}
 
 /**
  * The admin Audit tab: what the deployment-wide admin audit log holds for the last week, the log
  * itself, filtered and a page at a time, and the log's retention.
  */
 export const AdminAuditPanel = ({ admin, settings, onSettingsChanged, filter, onFilterChange }: AdminAuditPanelProps) => {
+  const { t } = useI18n()
   const toasts = useKumoToastManager()
   // Each load is one value of this; a new one supersedes those before it.
   const [loads, setLoads] = useState(0)
@@ -162,7 +169,7 @@ export const AdminAuditPanel = ({ admin, settings, onSettingsChanged, filter, on
       await onSettingsChanged()
       return true
     } catch (err) {
-      reportFailure('Couldn’t reload the admin settings', err)
+      reportFailure(t('Couldn’t reload the admin settings'), err)
       return false
     }
   }
@@ -174,10 +181,9 @@ export const AdminAuditPanel = ({ admin, settings, onSettingsChanged, filter, on
       <section className="space-y-6" aria-labelledby={activityHeading}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h2 id={activityHeading} className="text-lg font-semibold text-kumo-strong">Admin activity</h2>
+            <h2 id={activityHeading} className="text-lg font-semibold text-kumo-strong">{t('Admin activity')}</h2>
             <p className="text-sm text-kumo-subtle mt-0.5">
-              Every change an admin makes to the deployment&rsquo;s settings, kept
-              for {NUMBER.format(retention.effective)} days.
+              {t('Every change an admin makes to the deployment’s settings, kept for {days} days.', { days: NUMBER.format(retention.effective) })}
             </p>
           </div>
           <Button
@@ -188,7 +194,7 @@ export const AdminAuditPanel = ({ admin, settings, onSettingsChanged, filter, on
             disabled={refreshing}
             onClick={reload}
           >
-            Refresh
+            {t('Refresh')}
           </Button>
         </div>
 
@@ -199,14 +205,14 @@ export const AdminAuditPanel = ({ admin, settings, onSettingsChanged, filter, on
         )}
         {statsFailed && (
           <div className={`${CARD} text-center`}>
-            <p role="alert" className="text-sm text-kumo-danger">Couldn’t load the admin audit statistics.</p>
-            <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>Retry</Button>
+            <p role="alert" className="text-sm text-kumo-danger">{t('Couldn’t load the admin audit statistics.')}</p>
+            <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>{t('Retry')}</Button>
           </div>
         )}
         {stats !== null && !statsFailed && <StatsCards stats={stats} onAdminSelect={selectAdmin} />}
 
         <section className={CARD} aria-labelledby={logHeading}>
-          <h3 id={logHeading} className="text-lg font-semibold text-kumo-strong mb-4">Activity log</h3>
+          <h3 id={logHeading} className="text-lg font-semibold text-kumo-strong mb-4">{t('Activity log')}</h3>
           <AuditLog
             admin={admin}
             filter={filter}
@@ -219,30 +225,24 @@ export const AdminAuditPanel = ({ admin, settings, onSettingsChanged, filter, on
       </section>
 
       <div className={CARD}>
-        <h2 className="text-lg font-semibold text-kumo-strong mb-4">Audit retention</h2>
+        <h2 className="text-lg font-semibold text-kumo-strong mb-4">{t('Audit retention')}</h2>
         {retention.chosen < retention.min && (
           <p className="text-sm text-kumo-subtle mb-4">
-            The retention set here is {NUMBER.format(retention.chosen)} days, so this
-            deployment&rsquo;s minimum of {NUMBER.format(retention.min)} days is what holds it up. If
-            a deploy lowers or removes ADMIN_AUDIT_RETENTION_MIN_DAYS, as a deploy tool that writes
-            the backend&rsquo;s variables without it does, {NUMBER.format(retention.chosen)} days
-            applies again. To keep a retention either way, type the number of days and save it, even
-            the minimum.
+            {t('The retention set here is {chosen} days, so this deployment’s minimum of {min} days is what holds it up. If a deploy lowers or removes ADMIN_AUDIT_RETENTION_MIN_DAYS, as a deploy tool that writes the backend’s variables without it does, {chosen} days applies again. To keep a retention either way, type the number of days and save it, even the minimum.',
+              { chosen: NUMBER.format(retention.chosen), min: NUMBER.format(retention.min) })}
           </p>
         )}
         <div className="max-w-md">
           <DurationSetting
-            label={RETENTION_LABEL}
-            help={
-              'How long the admin audit log keeps a record. This deployment keeps at least ' +
-              `${NUMBER.format(retention.min)} days, which its ADMIN_AUDIT_RETENTION_MIN_DAYS variable sets.`
-            }
+            label={t(RETENTION_LABEL)}
+            help={t('How long the admin audit log keeps a record. This deployment keeps at least {days} days, which its ADMIN_AUDIT_RETENTION_MIN_DAYS variable sets.',
+              { days: NUMBER.format(retention.min) })}
             unit="days"
             min={retention.min}
             max={MAX_ADMIN_AUDIT_RETENTION_DAYS}
             value={retention.effective}
             onSave={(days) =>
-              change(`Couldn’t update “${RETENTION_LABEL}”`, () => admin.setAdminAuditRetentionDays(days))}
+              change(t('Couldn’t update “{label}”', { label: t(RETENTION_LABEL) }), () => admin.setAdminAuditRetentionDays(days))}
           />
         </div>
       </div>

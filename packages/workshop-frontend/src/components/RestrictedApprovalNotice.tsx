@@ -1,4 +1,5 @@
 import { ShieldWarning } from '@phosphor-icons/react'
+import { useI18n } from '../i18n'
 
 /**
  * What an approver is told before approving an action in a workspace that has read restricted
@@ -14,6 +15,7 @@ export const RESTRICTED_APPROVAL_COPY =
  * description untruncated alongside it, since the notice asks the approver to read all of it.
  */
 export function RestrictedApprovalNotice({ id, className = '' }: { id?: string, className?: string }) {
+  const { t } = useI18n()
   return (
     <div
       id={id}
@@ -24,7 +26,7 @@ export function RestrictedApprovalNotice({ id, className = '' }: { id?: string, 
         <ShieldWarning size={18} weight="duotone" />
       </div>
       <p className="m-0 text-[12px] leading-[18px] tracking-[-0.1px] text-kumo-default">
-        {RESTRICTED_APPROVAL_COPY}
+        {t(RESTRICTED_APPROVAL_COPY)}
       </p>
     </div>
   )
