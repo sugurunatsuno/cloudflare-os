@@ -1,7 +1,9 @@
 import { RpcStub, RpcTarget, newHttpBatchRpcResponse, newWebSocketRpcSession, RpcSessionOptions } from "capnweb";
 import { validateRpc } from "capnweb-validate";
 export { ChatGptConnection } from "./chatgpt-connection.js";
-import type { OpenCodeGoAccountInfo } from "@gadgets/workshop-shared/api";
+export { ClaudeConnection } from "./claude-connection.js";
+export { CopilotConnection } from "./copilot-connection.js";
+import type { OpenCodeGoAccountInfo, CopilotConnectionStart } from "@gadgets/workshop-shared/api";
 import type { JWTPayload } from "jose";
 import { PublicApi, ROUTER_TAG_PROBE_PATH, VERSION_PATH, AuthenticatedApi, Overseer, WorkspaceMetadataWithTimestamps, AiChatAuthorInfo, RedactedAiModelConfig, AiGatewayInfo, ModelKind, ConnectedAccountsSubscriber, ConnectedAccountsFilter, GatekeeperVendorFilter, ObserverConfigCallback, BlueprintLibrarySummary, BlueprintPublicInfo, BlueprintUserSummary, BlueprintBindingAssignment, AgentSpawnerConfig, WorkpieceId, BLUEPRINT_SCREENSHOT_PATH_PREFIX, BLUEPRINT_SCREENSHOT_R2_PREFIX, blueprintScreenshotUrl, ServerConfig, CloudflareUsageInfo, CloudflareAccountOption, LoginAttempt, GatekeeperAppInfo, AdminApi, GatekeeperVendorInfo, OutputFormatOffer, ListOutputsResult, UserDirectoryRecord, createOpenWorkspaceError, getOpenWorkspaceErrorCode, OPEN_WORKSPACE_ERROR_CODES, AUTH_ERROR_CODES, createAuthError, ConnectFlowStart, NotificationSubscriber, NotificationMute, WebPushSubscription, type UnreadStateSubscriber, AdminVia } from '@gadgets/workshop-shared/api';
 import type { UiFeatureFlags } from "@gadgets/workshop-shared/feature-flags";
@@ -200,6 +202,36 @@ class AuthenticatedApiImpl extends RpcTarget implements AuthenticatedApi {
   }
   disconnectChatGpt(): Promise<boolean> {
     return this.#user.disconnectChatGpt();
+  }
+  importClaude(credentials: string): Promise<void> {
+    return this.#user.importClaude(credentials);
+  }
+  getClaudeAccount(): Promise<{email?: string} | null> {
+    return retryOnDoReset(() => this.#user.getClaudeAccount());
+  }
+  disconnectClaude(): Promise<boolean> {
+    return retryOnDoReset(() => this.#user.disconnectClaude());
+  }
+  startCopilotConnection(): Promise<CopilotConnectionStart> {
+    return retryOnDoReset(() => this.#user.startCopilotConnection());
+  }
+  completeCopilotConnection(): Promise<boolean> {
+    return retryOnDoReset(() => this.#user.completeCopilotConnection());
+  }
+  getCopilotAccount(): Promise<{login?: string} | null> {
+    return retryOnDoReset(() => this.#user.getCopilotAccount());
+  }
+  disconnectCopilot(): Promise<void> {
+    return retryOnDoReset(() => this.#user.disconnectCopilot());
+  }
+  connectGemini(apiKey: string): Promise<void> {
+    return this.#user.connectGemini(apiKey);
+  }
+  getGeminiAccount(): Promise<{modelCount: number} | null> {
+    return retryOnDoReset(() => this.#user.getGeminiAccount());
+  }
+  disconnectGemini(): Promise<void> {
+    return this.#user.disconnectGemini();
   }
   addModel(profile: AiChatAuthorInfo, config: RedactedAiModelConfig,
            copySecretsFrom?: string): Promise<void> {

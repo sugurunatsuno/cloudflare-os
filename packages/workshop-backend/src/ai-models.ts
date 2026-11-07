@@ -202,13 +202,17 @@ const ZERO_COST: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 
 // only sizes the resends that keep a prompt cached (see CachedRequest).
 const AUTO_ROUTER_COST: ModelCost = { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 };
 
-// pi's builtin catalogs, by provider. Import per-provider, not providers/all.
+// pi's builtin catalogs, by provider. Import per-provider, not providers/all. The connection
+// providers borrow the metadata of the model family they ride: a Claude-plan model is an Anthropic
+// model and a Gemini one is a Google model, while Copilot's catalog is unknowable in advance.
 const CATALOGS: Partial<Record<AiModelProvider, Record<string, Model<Api>>>> = {
   anthropic: ANTHROPIC_MODELS,
   openai: OPENAI_MODELS,
   google: GOOGLE_MODELS,
   cloudflare: CLOUDFLARE_WORKERS_AI_MODELS,
   "opencode-go": OPENCODE_GO_MODELS,
+  claude: ANTHROPIC_MODELS,
+  gemini: GOOGLE_MODELS,
 };
 
 // Consult pi's builtin catalog for cost/compat metadata of a known model id. Unknown models are
@@ -1120,6 +1124,68 @@ function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelH
           "x-opencode-session": sessionAffinity ?? crypto.randomUUID()},
       });
     }
+    case "claude":
+      // The Claude plan rides the standard Anthropic Messages API with the connection's rotating
+      // OAuth token, which only its connection DO knows; its fetch proxy answers pi's requests on
+      // the same model IDs the direct provider uses.
+      return makeHandle({
+        model: {
+          id: config.model,
+          name: catalog?.name ?? config.model,
+          api: "anthropic-messages",
+          provider: "claude",
+          baseUrl: config.apiUrl ?? "https://api.anthropic.com",
+          reasoning: catalog?.reasoning ?? true,
+          input: catalog?.input ?? ["text", "image"],
+          cost: catalog?.cost ?? ZERO_COST,
+          ...window,
+          thinkingLevelMap: catalog?.thinkingLevelMap,
+          compat: catalog?.compat,
+        },
+        // The proxy rewrites the auth headers; this placeholder satisfies pi's pre-flight.
+        apiKey: "claude", sessionAffinity,
+        fetch: (input, init) => exports.ClaudeConnection.getByName(config.apiToken)
+          .fetch(new Request(input, init)),
+      });
+    case "copilot":
+      // Copilot inference is an OpenAI-compatible chat-completions endpoint on the account's own
+      // root, addressed by the connection's short-lived token; the connection DO refreshes it.
+      return makeHandle({
+        model: {
+          id: config.model,
+          name: catalog?.name ?? config.model,
+          api: "openai-completions",
+          provider: "copilot",
+          baseUrl: "https://api.githubcopilot.com",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: ZERO_COST,
+          ...window,
+          compat: {supportsStore: false, supportsDeveloperRole: false,
+            maxTokensField: "max_tokens" as const},
+        },
+        apiKey: "copilot", sessionAffinity,
+        fetch: (input, init) => exports.CopilotConnection.getByName(config.apiToken)
+          .fetch(new Request(input, init)),
+      });
+    case "gemini":
+      // The user's Gemini key rides Google's own API directly, like the google provider's direct
+      // path, but billed to the key instead of the deployment.
+      return makeHandle({
+        model: {
+          id: config.model,
+          name: catalog?.name ?? config.model,
+          api: "google-generative-ai",
+          provider: "gemini",
+          baseUrl: config.apiUrl ?? "https://generativelanguage.googleapis.com/v1beta",
+          reasoning: catalog?.reasoning ?? true,
+          input: catalog?.input ?? ["text", "image"],
+          cost: catalog?.cost ?? ZERO_COST,
+          ...window,
+          thinkingLevelMap: catalog?.thinkingLevelMap,
+        },
+        apiKey: config.apiToken, sessionAffinity, headers: config.extraHeaders,
+      });
     case "openrouter":
       return makeHandle({
         model: {id: config.model, name: config.model, api: "openai-completions", provider: "openrouter",

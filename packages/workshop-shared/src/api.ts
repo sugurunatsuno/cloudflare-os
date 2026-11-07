@@ -656,6 +656,29 @@ export interface AuthenticatedApi extends RpcTarget {
   disconnectOpenCodeGo(): Promise<void>;
   /** Remove ChatGPT credentials and models. False means remote revocation could not be confirmed. */
   disconnectChatGpt(): Promise<boolean>;
+  /** Import a local OAuth credential file to connect this user's Claude plan and model catalog. */
+  importClaude(credentials: string): Promise<void>;
+  /** The connected Claude account, without any credential or capability identifier. */
+  getClaudeAccount(): Promise<{email?: string} | null>;
+  /** Remove Claude credentials and models; whether remote revocation could be confirmed. */
+  disconnectClaude(): Promise<boolean>;
+  /** Begin a GitHub Copilot sign-in, handing the user the code to type into GitHub. */
+  startCopilotConnection(): Promise<CopilotConnectionStart>;
+  /**
+   * Poll the Copilot sign-in once; true when GitHub has authorized it and the models are
+   * registered. The browser calls this repeatedly until it answers true.
+   */
+  completeCopilotConnection(): Promise<boolean>;
+  /** The connected Copilot account, without any credential or capability identifier. */
+  getCopilotAccount(): Promise<{login?: string} | null>;
+  /** Remove Copilot credentials and models, preserving conversations. */
+  disconnectCopilot(): Promise<void>;
+  /** Connect a personal Gemini API key and register the available Gemini models. */
+  connectGemini(apiKey: string): Promise<void>;
+  /** The connected Gemini account, never its API key. */
+  getGeminiAccount(): Promise<{modelCount: number} | null>;
+  /** Remove the Gemini connection and its managed model configurations. */
+  disconnectGemini(): Promise<void>;
   /** Get profile info for the user who is logged in. */
   whoami(): Promise<AiChatAuthorInfo>;
 
@@ -2289,19 +2312,37 @@ export type CloudflareAccountOption = {
  */
 export type AiModelProvider =
     "openai" | "anthropic" | "google" | "cloudflare" | "ollama" | "cloudflare-auto-router" |
-    "opencode-go" | "openrouter" | "chatgpt";
+    "opencode-go" | "openrouter" | "chatgpt" | "claude" | "copilot" | "gemini";
 
 /** The model ID of AI Gateway's Auto Router, the one model of "cloudflare-auto-router". */
 export const AUTO_ROUTER_MODEL_ID = "cloudflare/auto";
 
 /**
  * Providers that must use their own API endpoint and credentials rather than the deployment's
- * Cloudflare AI Gateway. OpenCode Go exposes a mixed set of native API protocols, and OpenRouter
- * is a user-keyed external OpenAI-compatible endpoint; the deployment gateway only knows how to
- * route the built-in provider families.
+ * Cloudflare AI Gateway. OpenCode Go exposes a mixed set of native API protocols, OpenRouter,
+ * Claude and Gemini connections are user-keyed endpoints, and ChatGPT and Copilot ride their own
+ * OAuth-backed transports; the deployment gateway only knows how to route the built-in provider
+ * families.
  */
 export const DIRECT_ONLY_PROVIDERS: ReadonlySet<AiModelProvider> =
-    new Set(["opencode-go", "openrouter", "chatgpt"]);
+    new Set(["opencode-go", "openrouter", "chatgpt", "claude", "copilot", "gemini"]);
+
+/**
+ * Providers whose models are entirely managed by their connection on the AI Providers page:
+ * connecting mints the models and disconnecting removes them, so a user can never add a model
+ * under one by hand (compare DIRECT_ONLY_PROVIDERS, which additionally lets user-keyed providers
+ * like OpenRouter take a hand-added model).
+ */
+export const CONNECTION_MANAGED_PROVIDERS: ReadonlySet<AiModelProvider> =
+    new Set(["chatgpt", "claude", "copilot", "gemini"]);
+
+/** What starting a Copilot device-flow sign-in hands the browser to hand the user. */
+export type CopilotConnectionStart = {
+  /** The short code the user types into the GitHub verification page. */
+  userCode: string;
+  /** The page the user opens to enter `userCode`. */
+  verificationUri: string;
+};
 
 /** Information about the AI gateway configuration. Returned by `AuthenticatedApi.getAiConfig()`. */
 export type AiGatewayInfo = {
@@ -2821,6 +2862,12 @@ const SUGGESTED_MODEL_CATALOG = {
   "ollama": {
   },
   "chatgpt": {},
+  // Connection-managed providers: their live catalogs mint the model records, so none is
+  // suggested by hand. Claude and Gemini borrow the runtime metadata of their provider family's
+  // models in the backend (see CATALOGS there).
+  "claude": {},
+  "copilot": {},
+  "gemini": {},
   "opencode-go": {
     "gpt-6-luna": {name: "GPT 6 Luna (OpenCode Go)", contextWindow: 1050000, outputLimit: 128000},
     "gpt-5.6-luna": {name: "GPT 5.6 Luna (OpenCode Go)", contextWindow: 1050000, outputLimit: 128000},

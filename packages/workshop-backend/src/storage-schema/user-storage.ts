@@ -302,6 +302,13 @@ export function makeUserStorage(storage: DurableObjectStorage) {
       quickModel: <string | null>null,
       // ponytail: one active ChatGPT account per user; use a keyed collection for simultaneous accounts.
       chatGptConnection: <{id: string; email?: string} | null>null,
+      // ponytail: one active Claude and one active Copilot account per user, same caveat.
+      claudeConnection: <{id: string; email?: string} | null>null,
+      copilotConnection: <{id: string; login?: string} | null>null,
+      // A Copilot device-flow sign-in that has not completed yet: the connection DO of `id`
+      // holds GitHub's pending device code until it completes or expires.
+      copilotPending: <{id: string} | null>null,
+      geminiConnection: <{apiKey: string; modelIds: string[]} | null>null,
       openCodeGo: <OpenCodeGoConnection | null>null,
       openCodeGoMigrationCompleted: false,
       preferredModel: <string | null>null,

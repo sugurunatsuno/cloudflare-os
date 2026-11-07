@@ -88,6 +88,13 @@
       "new_sqlite_classes": [
         "ChatGptConnection"
       ]
+    },
+    {
+      "tag": "connections-v1",
+      "new_sqlite_classes": [
+        "ClaudeConnection",
+        "CopilotConnection"
+      ]
     }
   ]
 }

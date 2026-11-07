@@ -81,4 +81,6 @@ export const migrations: DurableObjectMigration[] = [
   // The deployment-wide admin audit log (admin-audit.ts).
   { tag: "v4", new_sqlite_classes: ["AdminAuditDurableObject"] },
   { tag: "chatgpt-v1", new_sqlite_classes: ["ChatGptConnection"] },
+  // Claude-plan and Copilot connections, each a capability-addressed credential store.
+  { tag: "connections-v1", new_sqlite_classes: ["ClaudeConnection", "CopilotConnection"] },
 ];

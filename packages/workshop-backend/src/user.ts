@@ -1,7 +1,9 @@
 import { RpcStub } from "capnweb";
-import { DIRECT_ONLY_PROVIDERS } from "@gadgets/workshop-shared/api";
+import { z } from "zod";
+import { DIRECT_ONLY_PROVIDERS, CONNECTION_MANAGED_PROVIDERS } from "@gadgets/workshop-shared/api";
 import type { ChatReadState, ChatTimelineHead, UnreadStateScope, UnreadStateSubscriber, UserUnreadState, UnreadThread, UserUnreadSummary, WorkspaceUnreadSummary } from "@gadgets/workshop-shared/api";
-import type { OpenCodeGoAccountInfo } from "@gadgets/workshop-shared/api";
+import type { OpenCodeGoAccountInfo, CopilotConnectionStart } from "@gadgets/workshop-shared/api";
+import { readProviderJson } from "./provider-json.js";
 import { fetchOpenCodeGoModels, openCodeGoApi, OPENCODE_GO_REFRESH_MS,
   type OpenCodeGoConnection, type OpenCodeGoModel } from "./opencode-go.js";
 import { WorkspaceMetadataWithTimestamps, AiChatAuthorInfo, AiModelConfig, RedactedAiModelConfig, ModelKind, modelKind, CollaboratorRole, ConnectedAccountsSubscriber, ConnectedAccountsFilter, GatekeeperVendorFilter, WorkspaceMetadata, BlueprintMetadata, BlueprintLibrarySummary, BlueprintSource, BlueprintUserSummary, BLUEPRINT_SCREENSHOT_R2_PREFIX, GatekeeperVendorInfo, OutputSummary, ListOutputsResult, AUTH_ERROR_CODES, createAuthError, ConnectFlowStart, validateCommitEmail, NotificationSubscriber, NotificationMute, UserNotification, type DeviceSessionHandoffStart, type WebPushSubscription } from '@gadgets/workshop-shared/api';
@@ -1404,6 +1406,11 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
     return connection ? {email: connection.email} : null;
   }
 
+  async getGeminiAccount(): Promise<{modelCount: number} | null> {
+    const saved = this.storage.geminiConnection.get();
+    return saved ? {modelCount: saved.modelIds.length} : null;
+  }
+
   async disconnectChatGpt(): Promise<boolean> {
     const id = this.storage.chatGptConnection.get()?.id;
     const revoked = id ? await this.ctx.exports.ChatGptConnection.getByName(id).disconnect() : true;
@@ -1415,6 +1422,165 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
       this.storage.chatGptConnection.put(null);
     });
     return revoked;
+  }
+
+  async importClaude(credentials: string): Promise<void> {
+    const models = await getGatewayModels(this.env);
+    models?.refuseUserModel();
+    const id = crypto.randomUUID();
+    const connection = this.ctx.exports.ClaudeConnection.getByName(id);
+    let catalog;
+    try { catalog = await connection.initialize(credentials); }
+    catch { await connection.disconnect(); throw new Error("Claude connection failed. Run the sign-in helper again and import the new file."); }
+    const records = catalog.models.map(model => ({
+      profile: {type: "agent" as const, id: `claude:${model.id}`,
+        name: `${model.name} (Claude)`},
+      config: {provider: "claude" as const, model: model.id, apiToken: id},
+    }));
+    if (records.some(record => models?.get(record.profile.id))) {
+      await connection.disconnect();
+      throw new Error("A deployment model is using a reserved Claude model ID.");
+    }
+    const previous = this.storage.claudeConnection.get();
+    this.ctx.storage.transactionSync(() => {
+      for (const record of this.storage.aiModels.list()) {
+        if (record.config.provider === "claude") this.storage.aiModels.delete(record.profile.id);
+      }
+      for (const record of records) this.storage.aiModels.put(record);
+      this.storage.claudeConnection.put({id, email: catalog.email});
+    });
+    if (previous) await this.ctx.exports.ClaudeConnection.getByName(previous.id).disconnect();
+  }
+
+  async getClaudeAccount(): Promise<{email?: string} | null> {
+    const connection = this.storage.claudeConnection.get();
+    return connection ? {email: connection.email} : null;
+  }
+
+  async disconnectClaude(): Promise<boolean> {
+    const id = this.storage.claudeConnection.get()?.id;
+    const revoked = id ? await this.ctx.exports.ClaudeConnection.getByName(id).disconnect() : true;
+    if (this.storage.claudeConnection.get()?.id !== id) return revoked;
+    this.ctx.storage.transactionSync(() => {
+      for (const record of this.storage.aiModels.list()) {
+        if (record.config.provider === "claude") this.storage.aiModels.delete(record.profile.id);
+      }
+      this.storage.claudeConnection.put(null);
+    });
+    return revoked;
+  }
+
+  async startCopilotConnection(): Promise<CopilotConnectionStart> {
+    (await getGatewayModels(this.env))?.refuseUserModel();
+    const id = crypto.randomUUID();
+    await this.ctx.exports.CopilotConnection.getByName(id).disconnect();
+    const start = await this.ctx.exports.CopilotConnection.getByName(id).begin();
+    this.storage.copilotPending.put({id});
+    return {userCode: start.userCode, verificationUri: start.verificationUri};
+  }
+
+  async completeCopilotConnection(): Promise<boolean> {
+    const pending = this.storage.copilotPending.get();
+    if (!pending) return false;
+    const connection = this.ctx.exports.CopilotConnection.getByName(pending.id);
+    if (!await connection.complete()) return false;
+    const models = await getGatewayModels(this.env);
+    if (models) models.refuseUserModel();
+    const catalog = await connection.models();
+    const records = catalog.map(model => ({
+      profile: {type: "agent" as const, id: `copilot:${model.id}`,
+        name: `${model.name} (Copilot)`},
+      config: {provider: "copilot" as const, model: model.id, apiToken: pending.id},
+    }));
+    if (records.some(record => models?.get(record.profile.id))) {
+      await connection.disconnect();
+      this.storage.copilotPending.put(null);
+      throw new Error("A deployment model is using a reserved Copilot model ID.");
+    }
+    const previous = this.storage.copilotConnection.get();
+    this.ctx.storage.transactionSync(() => {
+      for (const record of this.storage.aiModels.list()) {
+        if (record.config.provider === "copilot") this.storage.aiModels.delete(record.profile.id);
+      }
+      for (const record of records) this.storage.aiModels.put(record);
+      this.storage.copilotConnection.put({id: pending.id, login: undefined});
+      this.storage.copilotPending.put(null);
+    });
+    if (previous) await this.ctx.exports.CopilotConnection.getByName(previous.id).disconnect();
+    return true;
+  }
+
+  async getCopilotAccount(): Promise<{login?: string} | null> {
+    const connection = this.storage.copilotConnection.get();
+    if (connection) return {login: connection.login};
+    // A sign-in in progress is a connection without an account yet, so the page keeps its panel.
+    return this.storage.copilotPending.get() ? {} : null;
+  }
+
+  async disconnectCopilot(): Promise<void> {
+    const saved = this.storage.copilotConnection.get();
+    const id = saved?.id ?? this.storage.copilotPending.get()?.id;
+    if (id) await this.ctx.exports.CopilotConnection.getByName(id).disconnect();
+    this.ctx.storage.transactionSync(() => {
+      if (this.storage.copilotConnection.get()?.id !== (id ?? null)) return;
+      for (const record of this.storage.aiModels.list()) {
+        if (record.config.provider === "copilot") this.storage.aiModels.delete(record.profile.id);
+      }
+      this.storage.copilotConnection.put(null);
+      this.storage.copilotPending.put(null);
+    });
+  }
+
+  async connectGemini(apiKey: string): Promise<void> {
+    (await getGatewayModels(this.env))?.refuseUserModel();
+    const key = apiKey.trim();
+    if (!key || key.length > 512 || /[\r\n]/.test(key)) throw new Error("Enter a valid Gemini API key.");
+    const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+      headers: {"x-goog-api-key": key}, signal: AbortSignal.timeout(30000), redirect: "manual",
+    });
+    if (response.status === 400 || response.status === 401 || response.status === 403) {
+      throw new Error("The Gemini API key was not accepted; check the key.");
+    }
+    if (!response.ok) throw new Error(`Unable to list Gemini models (${response.status}).`);
+    const catalog = z.object({models: z.array(z.object({
+      name: z.string().regex(/^models\/[\w.:-]{1,120}$/),
+      displayName: z.string().min(1).max(256),
+      supportedGenerationMethods: z.array(z.string()).optional(),
+    })).max(500)}).parse(await readProviderJson(response, 2 * 1024 * 1024));
+    const entries = catalog.models
+        .filter(model => model.name.startsWith("models/gemini-") &&
+            (model.supportedGenerationMethods ?? []).includes("generateContent"));
+    if (!entries.length) throw new Error("This API key has no usable Gemini models.");
+    const records = entries.map(entry => ({
+      profile: {type: "agent" as const, id: `gemini:${entry.name.slice("models/".length)}`,
+        name: `${entry.displayName} (Gemini)`},
+      config: {provider: "gemini" as const, model: entry.name.slice("models/".length),
+        apiToken: key},
+    }));
+    const previousId = this.storage.geminiConnection.get()?.modelIds ?? [];
+    this.ctx.storage.transactionSync(() => {
+      for (const id of previousId) {
+        if (this.storage.aiModels.get(id)?.config.provider === "gemini") {
+          this.storage.aiModels.delete(id);
+        }
+      }
+      for (const record of records) this.storage.aiModels.put(record);
+      this.storage.geminiConnection.put({apiKey: key, modelIds: records.map(r => r.profile.id)});
+    });
+  }
+
+  async disconnectGemini(): Promise<void> {
+    const saved = this.storage.geminiConnection.get();
+    if (!saved) return;
+    this.ctx.storage.transactionSync(() => {
+      for (const id of saved.modelIds) {
+        if (this.storage.aiModels.get(id)?.config.provider === "gemini") {
+          this.storage.aiModels.delete(id);
+        }
+      }
+      this.storage.geminiConnection.put(null);
+    });
   }
 
   async getModelConfig(id: string): Promise<{profile: AiChatAuthorInfo, config: RedactedAiModelConfig}> {
@@ -1567,7 +1733,9 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
     if (this.storage.openCodeGo.get()?.modelIds.includes(profile.id)) {
       throw new Error("Goの自動管理モデルはOpenCode Goの接続欄で管理してください。");
     }
-    if (config.provider === "chatgpt") throw new Error("Use Continue with ChatGPT to manage ChatGPT models.");
+    if (CONNECTION_MANAGED_PROVIDERS.has(config.provider)) {
+      throw new Error("Manage this provider's models from its connection in AI Providers.");
+    }
     if (models && !models.addableProviders.includes(config.provider) && !DIRECT_ONLY_PROVIDERS.has(config.provider)) {
       throw new Error(`Provider "${config.provider}" is not available in AI Gateway mode.`);
     }
@@ -1596,10 +1764,20 @@ export class UserDurableObject extends DurableObject<Cloudflare.Env> {
     let model = (await getGatewayModels(this.env))?.get(id);
     if (model) throw new Error(`Cannot delete built-in model "${model.name}".`);
 
-    if (this.storage.aiModels.get(id)?.config.provider === "chatgpt" &&
-        [...this.storage.aiModels.list()].filter(record => record.config.provider === "chatgpt").length === 1) {
-      await this.disconnectChatGpt();
-      return;
+    // A connection-managed provider's last model removes the whole connection, as removing the
+    // only ChatGPT model disconnects it.
+    const record = this.storage.aiModels.get(id);
+    if (record?.config.provider === "chatgpt" || record?.config.provider === "claude") {
+      const provider = record.config.provider;
+      if ([...this.storage.aiModels.list()]
+          .filter(candidate => candidate.config.provider === provider).length === 1) {
+        if (provider === "chatgpt") await this.disconnectChatGpt();
+        else await this.disconnectClaude();
+        return;
+      }
+    }
+    if (record && CONNECTION_MANAGED_PROVIDERS.has(record.config.provider)) {
+      throw new Error(`Cannot delete this model. Disconnect ${record.config.provider} instead.`);
     }
     this.storage.aiModels.delete(id);
   }
